@@ -13,7 +13,7 @@
 
 ## 📁 專案目錄結構
 
-\`\`\`text
+```text
 portfolio-backend/
 ├── src/
 │   ├── index.ts          # 應用程式入口與全域路由/CORS 設定
@@ -25,32 +25,31 @@ portfolio-backend/
 ├── schema.sql            # D1 資料庫建表與初始資料腳本
 ├── wrangler.jsonc        # Cloudflare 核心環境與變數設定檔
 └── package.json
-\`\`\`
 
 ## 🛠️ 本地開發環境設置 (Local Setup)
 
 ### 1. 安裝依賴套件
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 ### 2. 初始化本地測試資料庫
 專案使用 Cloudflare D1。在本地開發時，需先執行建表腳本來建立隱藏的 `.wrangler` 本地模擬庫：
-\`\`\`bash
+```bash
 npx wrangler d1 execute portfolio-db --local --file=./schema.sql
-\`\`\`
+```
 
 ### 3. 啟動開發伺服器
-\`\`\`bash
+```bash
 npm run dev
-\`\`\`
-伺服器將預設運行在 \`http://localhost:8787\`。
+```
+伺服器將預設運行在 `http://localhost:8787`。
 
 ## 🔐 環境變數與設定 (Environment Variables)
 
-請確保您的 \`wrangler.jsonc\` 中包含以下設定：
-* **D1 Database Binding**: 確保 \`database_id\` 對應您在 Cloudflare 後台建立的專案 ID。
-* **JWT_SECRET**: 用於簽發 Token 的密鑰，請在 \`vars\` 區塊中設定。
+請確保您的 `wrangler.jsonc` 中包含以下設定：
+* **D1 Database Binding**: 確保 `database_id` 對應您在 Cloudflare 後台建立的專案 ID。
+* **JWT_SECRET**: 用於簽發 Token 的密鑰，請在 `vars` 區塊中設定。
 
 ## 🗺️ API 路由文件 (API Documentation)
 
@@ -66,8 +65,8 @@ npm run dev
 
 ## 🚀 部署至正式環境 (Deployment)
 
-確認已使用 \`npx wrangler login\` 登入您的 Cloudflare 帳號後，執行以下指令即可一鍵部署至邊緣節點：
-\`\`\`bash
+確認已使用 `npx wrangler login` 登入您的 Cloudflare 帳號後，執行以下指令即可一鍵部署至邊緣節點：
+```bash
 npm run deploy
-\`\`\`
+```
 *(注意：正式環境的資料表需透過 Cloudflare Dashboard 或 `--remote` 指令另外建立。)*
