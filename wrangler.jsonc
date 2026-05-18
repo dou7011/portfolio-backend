@@ -1,0 +1,12 @@
+{
+  "name": "portfolio-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-18",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "portfolio-db",
+      "database_id": "42dcb812-027b-4ab1-bae4-bf40cef553e3"
+    }
+  ]
+}
