@@ -25,6 +25,7 @@ portfolio-backend/
 ├── schema.sql            # D1 資料庫建表與初始資料腳本
 ├── wrangler.jsonc        # Cloudflare 核心環境與變數設定檔
 └── package.json
+```
 
 ## 🛠️ 本地開發環境設置 (Local Setup)
 
