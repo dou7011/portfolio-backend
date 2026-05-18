@@ -40,6 +40,12 @@ npm install
 npx wrangler d1 execute portfolio-db --local --file=./schema.sql
 ```
 
+### 2.1 匯入 seed 測試資料
+若要將預設履歷資料寫入本地 D1，可執行以下指令：
+```bash
+npx wrangler d1 execute portfolio-db --local --file=./seed.sql
+```
+
 ### 3. 啟動開發伺服器
 ```bash
 npm run dev
