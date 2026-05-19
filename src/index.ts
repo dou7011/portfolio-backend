@@ -20,7 +20,7 @@ app.use(
       // 1. 建立您的白名單 (包含本地開發網址與正式上線網址)
       const whitelist = [
         'http://localhost:4200',        // Angular 本地開發預設 Port
-        'https://www.your-domain.com',  // 您 Angular 正式上線的網域
+        'https://portfolio-frontend-4fl.pages.dev/',  // 您 Angular 正式上線的網域
       ];
 
       // 2. 如果請求來源在白名單內，就回傳該來源 (允許通過)
