@@ -11,8 +11,8 @@ type Bindings = {
 // 建立一個獨立的 Hono 實例
 const auth = new Hono<{ Bindings: Bindings }>()
 
-// 初始化管理員帳號
-auth.post('/setup', async (c) => {
+// 註冊管理員帳號
+/*auth.post('/setup', async (c) => {
   const body = await c.req.json()
   const { email, password } = body
 
@@ -32,7 +32,7 @@ auth.post('/setup', async (c) => {
   } catch (error: any) {
     return c.json({ success: false, message: '帳號建立失敗!' }, 500)
   }
-})
+})*/
 
 // 管理員登入
 auth.post('/login', async (c) => {
