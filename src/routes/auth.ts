@@ -36,37 +36,49 @@ auth.post('/setup', async (c) => {
 
 // 管理員登入
 auth.post('/login', async (c) => {
-  const body = await c.req.json()
-  const { email, password } = body
+  const body = await c.req.json();
+  const { email, password } = body;
 
-  const user = await c.env.DB.prepare(
-    `SELECT * FROM users WHERE email = ? AND is_active = 1`
-  ).bind(email).first<{ id: number, email: string, password_hash: string, role: string }>()
-
-  if (!user) {
-    return c.json({ success: false, message: '登入失敗!' }, 401)
+  if (!email || !password) {
+    return c.json({ success: false, message: '請提供信箱與密碼' }, 400);
   }
 
-  const isPasswordValid = bcrypt.compareSync(password, user.password_hash)
-  if (!isPasswordValid) {
-    return c.json({ success: false, message: '登入失敗!' }, 401)
+  try {
+    // 去資料庫找這個 email
+    const { results } = await c.env.DB.prepare(
+      'SELECT * FROM users WHERE email = ? AND is_active = 1'
+    ).bind(email).all();
+
+    if (results.length === 0) {
+      return c.json({ success: false, message: '帳號或密碼錯誤' }, 401);
+    }
+
+    const user = results[0];
+
+    // 使用 bcrypt 比對密碼
+    const isValid = bcrypt.compareSync(password, user.password_hash as string);
+
+    if (!isValid) {
+      return c.json({ success: false, message: '帳號或密碼錯誤' }, 401);
+    }
+
+    // 簽發 JWT Token
+    const payload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+    };
+
+    const secret = 'my-super-secret-key-for-portfolio'; 
+    const token = await sign(payload, secret);
+
+    return c.json({ success: true, message: '登入成功', token });
+
+  } catch (error: any) {
+    // 🌟 如果後端真的出錯，至少要回傳 500，前端才不會無限卡死
+    return c.json({ success: false, message: '後端發生未知錯誤', error: error.message }, 500);
   }
-
-  const payload = {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 // 24 小時過期
-  }
-
-  const token = await sign(payload, c.env.JWT_SECRET, 'HS256')
-
-  return c.json({
-    success: true,
-    message: '登入成功!',
-    token: token,
-    user: { id: user.id, email: user.email, role: user.role }
-  })
-})
+});
 
 export default auth
