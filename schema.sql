@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS resumes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lang TEXT NOT NULL,
     title TEXT NOT NULL,
     summary TEXT,
     skills TEXT,

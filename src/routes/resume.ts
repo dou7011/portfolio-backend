@@ -11,30 +11,31 @@ const resume = new Hono<{ Bindings: Bindings }>()
 
 // 1. 前台公開讀取履歷 (取得 id = 1 的那筆資料)
 resume.get('/', async (c) => {
-  try {
-    const data = await c.env.DB.prepare(
-      'SELECT * FROM resumes WHERE id = 1'
-    ).first()
+  // 1. 取得網址上的 lang 參數，沒傳的話預設給 'zh'
+  const lang = c.req.query('lang') || 'zh';
+  
+  // 2. 🌟 直接用 lang 欄位去資料庫搜尋，這比用 ID 找清楚太多了！
+  const { results } = await c.env.DB.prepare(
+    'SELECT * FROM resumes WHERE lang = ? LIMIT 1'
+  ).bind(lang).all();
 
-    if (!data) {
-      return c.json({ success: false, message: '找不到履歷資料' }, 404)
-    }
-
-    // 因為 SQLite 存的是 JSON 字串，讀出來時轉回 JSON 物件給前端
-    return c.json({
-      success: true,
-      data: {
-        ...data,
-        skills: JSON.parse(data.skills as string),
-        experience: JSON.parse(data.experience as string),
-        education: JSON.parse(data.education as string),
-        certifications: JSON.parse(data.certifications as string)
-      }
-    })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
+  if (results.length === 0) {
+    return c.json({ success: false, message: `找不到語言為 ${lang} 的履歷資料` }, 404);
   }
-})
+
+  const resume = results[0];
+
+  // 3. 解析 JSON 字串回物件
+  const parsedResume = {
+    ...resume,
+    skills: JSON.parse(resume.skills as string),
+    experience: JSON.parse(resume.experience as string),
+    education: JSON.parse(resume.education as string),
+    certifications: JSON.parse(resume.certifications as string)
+  };
+
+  return c.json({ success: true, data: parsedResume });
+});
 
 // 2. 後台管理員更新履歷
 resume.put('/', authGuard, async (c) => {
