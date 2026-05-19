@@ -17,7 +17,7 @@ auth.post('/setup', async (c) => {
   const { email, password } = body
 
   if (!email || !password) {
-    return c.json({ success: false, message: '請提供信箱與密碼' }, 400)
+    return c.json({ success: false, message: '請提供信箱與密碼!' }, 400)
   }
 
   const salt = bcrypt.genSaltSync(10)
@@ -28,9 +28,9 @@ auth.post('/setup', async (c) => {
       `INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'ADMIN')`
     ).bind(email, hashedPassword).run()
 
-    return c.json({ success: true, message: '管理員帳號建立成功！' })
+    return c.json({ success: true, message: '管理員帳號建立成功!' })
   } catch (error: any) {
-    return c.json({ success: false, message: '帳號建立失敗，Email 可能已存在', error: error.message }, 500)
+    return c.json({ success: false, message: '帳號建立失敗!' }, 500)
   }
 })
 
@@ -44,12 +44,12 @@ auth.post('/login', async (c) => {
   ).bind(email).first<{ id: number, email: string, password_hash: string, role: string }>()
 
   if (!user) {
-    return c.json({ success: false, message: '帳號不存在或已被停用' }, 401)
+    return c.json({ success: false, message: '登入失敗!' }, 401)
   }
 
   const isPasswordValid = bcrypt.compareSync(password, user.password_hash)
   if (!isPasswordValid) {
-    return c.json({ success: false, message: '密碼錯誤' }, 401)
+    return c.json({ success: false, message: '登入失敗!' }, 401)
   }
 
   const payload = {
@@ -63,7 +63,7 @@ auth.post('/login', async (c) => {
 
   return c.json({
     success: true,
-    message: '登入成功',
+    message: '登入成功!',
     token: token,
     user: { id: user.id, email: user.email, role: user.role }
   })
