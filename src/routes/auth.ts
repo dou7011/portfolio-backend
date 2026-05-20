@@ -3,6 +3,7 @@ import { sign } from 'hono/jwt'
 import * as bcrypt from 'bcryptjs'
 import type { D1Database } from '@cloudflare/workers-types'
 import { verify } from 'hono/jwt'
+import { authGuard } from '../middleware/authGuard'
 
 type Bindings = {
   DB: D1Database
@@ -82,7 +83,7 @@ auth.post('/login', async (c) => {
 });
 
 // 🌟 即時權限驗證 API (讓前端守衛每次切換頁面時校驗)
-auth.get('/me', async (c) => {
+auth.get('/me', authGuard, async (c) => {
   // 1. 從 Headers 拿到 Authorization 標頭
   const authHeader = c.req.header('Authorization');
   
