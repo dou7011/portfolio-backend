@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { sign } from 'hono/jwt'
 import * as bcrypt from 'bcryptjs'
 import type { D1Database } from '@cloudflare/workers-types'
+import { verify } from 'hono/jwt'
 
 type Bindings = {
   DB: D1Database
@@ -70,14 +71,58 @@ auth.post('/login', async (c) => {
       exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
     };
 
-    const secret = 'my-super-secret-key-for-portfolio'; 
-    const token = await sign(payload, secret);
+    const token = await sign(payload, c.env.JWT_SECRET, 'HS256');
 
     return c.json({ success: true, message: '登入成功', token });
 
   } catch (error: any) {
     // 🌟 如果後端真的出錯，至少要回傳 500，前端才不會無限卡死
     return c.json({ success: false, message: '後端發生未知錯誤', error: error.message }, 500);
+  }
+});
+
+// 🌟 即時權限驗證 API (讓前端守衛每次切換頁面時校驗)
+auth.get('/me', async (c) => {
+  // 1. 從 Headers 拿到 Authorization 標頭
+  const authHeader = c.req.header('Authorization');
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ success: false, message: '未提供憑證，拒絕存取' }, 401);
+  }
+
+  // 2. 切出 Token 本體 (拔掉 "Bearer " 字樣)
+  const token = authHeader.split(' ')[1];
+
+  try {
+    // 3. 解碼並驗證 Token 是否合法、是否過期
+    const payload = await verify(token, c.env.JWT_SECRET, 'HS256');
+
+    // 4. 🌟 實作「權限要是最新」
+    // 雖然 Token 裡面有寫 role，但為了防止帳號中途被停權或改權限，
+    // 我們直接拿 Token 裡的 id 去 D1 資料庫撈最新狀態！
+    const { results } = await c.env.DB.prepare(
+      'SELECT id, email, role, is_active FROM users WHERE id = ?'
+    ).bind(payload.id).all();
+
+    if (results.length === 0 || results[0].is_active !== 1) {
+      return c.json({ success: false, message: '帳號不存在或已被停權' }, 401);
+    }
+
+    const currentUser = results[0];
+
+    // 5. 驗證通過，把最新的使用者資料與成功狀態回傳給前端守衛
+    return c.json({
+      success: true,
+      user: {
+        id: currentUser.id,
+        email: currentUser.email,
+        role: currentUser.role
+      }
+    });
+
+  } catch (error) {
+    // 如果 Token 過期、被篡改、解碼失敗，一律丟出 401 讓前端踢人
+    return c.json({ success: false, message: '憑證無效或已過期' }, 401);
   }
 });
 

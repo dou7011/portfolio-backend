@@ -1,79 +1,100 @@
-# 🚀 Portfolio Backend (個人網站後端 API)
+# Portfolio Backend
 
-這是一個專為個人履歷與作品集網站打造的輕量級、無伺服器 (Serverless) 後端專案。
-採用 **Hono** 框架建構，並部署於 **Cloudflare Workers** 邊緣運算環境，搭配 **Cloudflare D1** (SQLite) 作為資料庫，具備極佳的存取速度與零維護成本。
+這是一個為個人作品集與履歷網站設計的後端 API，使用 Hono 建構，部署在 Cloudflare Workers，並以 Cloudflare D1 作為資料庫。專案提供登入驗證、JWT 權限控管，以及履歷資料的公開讀取與後台更新。
 
-## ✨ 核心技術棧 (Tech Stack)
+## 技術棧
 
-* **框架**: [Hono](https://hono.dev/) (超輕量 Edge 框架)
-* **運行環境**: Cloudflare Workers
-* **資料庫**: Cloudflare D1 (Serverless SQLite)
-* **語言**: TypeScript
-* **安全性**: JWT (JSON Web Tokens) 認證、Bcryptjs 密碼雜湊、全線 SQL 參數化查詢 (防禦 SQL Injection)
+- Hono
+- Cloudflare Workers
+- Cloudflare D1
+- TypeScript
+- JWT 驗證與 bcrypt 密碼雜湊
 
-## 📁 專案目錄結構
+## 專案結構
 
 ```text
 portfolio-backend/
 ├── src/
-│   ├── index.ts          # 應用程式入口與全域路由/CORS 設定
-│   ├── middleware/       
-│   │   └── authGuard.ts  # JWT 權限守衛，即時驗證管理員狀態
-│   └── routes/           
-│       ├── auth.ts       # 認證相關 API (註冊/登入)
-│       └── resume.ts     # 履歷資料 CRUD API
-├── schema.sql            # D1 資料庫建表與初始資料腳本
-├── wrangler.jsonc        # Cloudflare 核心環境與變數設定檔
-└── package.json
+│   ├── index.ts
+│   ├── middleware/
+│   │   └── authGuard.ts
+│   └── routes/
+│       ├── auth.ts
+│       └── resume.ts
+├── schema.sql
+├── seed.sql
+├── wrangler.jsonc
+├── package.json
+└── README.md
 ```
 
-## 🛠️ 本地開發環境設置 (Local Setup)
+## 本地開發
 
-### 1. 安裝依賴套件
+1. 安裝依賴
+
 ```bash
 npm install
 ```
 
-### 2. 初始化本地測試資料庫
-專案使用 Cloudflare D1。在本地開發時，需先執行建表腳本來建立隱藏的 `.wrangler` 本地模擬庫：
+2. 建立本地 D1 資料表
+
 ```bash
 npx wrangler d1 execute portfolio-db --local --file=./schema.sql
 ```
 
-### 2.1 匯入 seed 測試資料
-若要將預設履歷資料寫入本地 D1，可執行以下指令：
+3. 匯入測試資料
+
 ```bash
 npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 ```
 
-### 3. 啟動開發伺服器
+4. 啟動開發伺服器
+
 ```bash
 npm run dev
 ```
-伺服器將預設運行在 `http://localhost:8787`。
 
-## 🔐 環境變數與設定 (Environment Variables)
+預設會在 `http://localhost:8787` 提供服務。
 
-請確保您的 `wrangler.jsonc` 中包含以下設定：
-* **D1 Database Binding**: 確保 `database_id` 對應您在 Cloudflare 後台建立的專案 ID。
-* **JWT_SECRET**: 用於簽發 Token 的密鑰，請在 `vars` 區塊中設定。
+## 環境設定
 
-## 🗺️ API 路由文件 (API Documentation)
+`wrangler.jsonc` 目前已設定 D1 binding：
 
-本專案採 RESTful API 設計，以下為開放之路由端點：
+- binding: `DB`
+- database name: `portfolio-db`
 
-| 請求方法 | 端點路徑 (Endpoint) | 需驗證 (Auth) | 功能說明 |
-| :--- | :--- | :---: | :--- |
-| **GET** | `/` | 否 | 伺服器健康狀態檢查 (Health Check)。 |
-| **POST** | `/api/auth/setup` | 否 | 初始化管理員帳號 (建立完畢後建議關閉此路由)。 |
-| **POST** | `/api/auth/login` | 否 | 管理員登入，驗證成功後核發 24 小時效期的 JWT。 |
-| **GET** | `/api/resume` | 否 | 取得公開的個人履歷 JSON 資料。 |
-| **PUT** | `/api/resume` | **是 (Token)** | 更新履歷資料。需透過 `authGuard` 驗證 Token 及即時 `ADMIN` 權限。 |
+另外還需要設定 JWT 密鑰 `JWT_SECRET`，可透過 Cloudflare Workers secret 或環境變數提供。
 
-## 🚀 部署至正式環境 (Deployment)
+## 資料表
 
-確認已使用 `npx wrangler login` 登入您的 Cloudflare 帳號後，執行以下指令即可一鍵部署至邊緣節點：
+專案使用兩張表：
+
+- `users`：儲存管理員帳號、密碼雜湊、角色與啟用狀態
+- `resumes`：儲存多語系履歷內容，包含 `lang`、`title`、`summary`、`skills`、`experience`、`education`、`certifications`
+
+## API 路由
+
+| 方法 | 路徑 | 驗證 | 說明 |
+| --- | --- | --- | --- |
+| GET | `/` | 否 | 健康檢查，回傳服務運作狀態 |
+| POST | `/api/auth/login` | 否 | 管理員登入，成功後回傳 JWT token |
+| POST | `/api/auth/setup` | 否 | 初始化管理員帳號 (建立完畢後建議關閉此路由)。 |
+| GET | `/api/auth/me` | 是 | 驗證目前 token 並回傳最新使用者資料 |
+| GET | `/api/resume?lang=zh` | 否 | 讀取公開履歷資料，預設語系為 `zh` |
+| PUT | `/api/resume` | 是 | 更新履歷資料，需要有效的管理員 token |
+
+## 注意事項
+
+- `PUT /api/resume` 會先經過 `authGuard`，因此 token 必須有效且帳號狀態為啟用、角色為 `ADMIN`。
+- 履歷資料中的 `skills`、`experience`、`education`、`certifications` 以 JSON 字串儲存在 D1，讀取時會再轉回物件。
+- CORS 已在 `src/index.ts` 全域啟用，目前白名單包含本機開發網址與前端正式網域。
+
+## 部署
+
+登入 Cloudflare 後即可部署：
+
 ```bash
 npm run deploy
 ```
-*(注意：正式環境的資料表需透過 Cloudflare Dashboard 或 `--remote` 指令另外建立。)*
+
+如果正式環境尚未建立 D1 資料表，請先套用 `schema.sql`，必要時再匯入 `seed.sql`。
