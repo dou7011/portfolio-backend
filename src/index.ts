@@ -9,7 +9,7 @@ type Bindings = {
   JWT_SECRET: string
 }
 
-const app = new Hono<{ Bindings: Bindings }>()
+const app = new Hono<{ Bindings: Bindings }>({ strict: false })
 
 // 全域啟用 CORS
 app.use(

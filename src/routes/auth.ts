@@ -11,7 +11,7 @@ type Bindings = {
 }
 
 // 建立一個獨立的 Hono 實例
-const auth = new Hono<{ Bindings: Bindings }>()
+const auth = new Hono<{ Bindings: Bindings }>({ strict: false })
 
 // 註冊管理員帳號
 /*auth.post('/setup', async (c) => {

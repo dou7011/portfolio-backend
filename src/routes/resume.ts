@@ -7,7 +7,7 @@ type Bindings = {
   JWT_SECRET: string
 }
 
-const resume = new Hono<{ Bindings: Bindings }>()
+const resume = new Hono<{ Bindings: Bindings }>({ strict: false })
 
 // 1. 前台公開讀取履歷 (取得 id = 1 的那筆資料)
 resume.get('/', async (c) => {
