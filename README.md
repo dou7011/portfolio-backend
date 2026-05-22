@@ -14,18 +14,18 @@
 
 ```text
 portfolio-backend/
-├── src/
-│   ├── index.ts
+├── src/                     # 源碼目錄
+│   ├── index.ts             # Hono app 入口：設定 CORS、路由掛載
 │   ├── middleware/
-│   │   └── authGuard.ts
+│   │   └── authGuard.ts     # JWT 權限中介層：驗證管理員 token
 │   └── routes/
-│       ├── auth.ts
-│       └── resume.ts
-├── schema.sql
-├── seed.sql
-├── wrangler.jsonc
-├── package.json
-└── README.md
+│       ├── auth.ts          # /api/auth 路由：登入與 /me 權限驗證
+│       └── resume.ts        # /api/resume 路由：公開讀履歷、受保護更新
+├── schema.sql               # D1 建表指令
+├── seed.sql                 # 測試資料種子
+├── wrangler.jsonc           # Cloudflare Workers / D1 綁定設定
+├── package.json             # 依賴與開發腳本
+└── README.md                # 專案說明
 ```
 
 ## 本地開發
