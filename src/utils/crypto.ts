@@ -36,7 +36,7 @@ export async function hashPassword(password: string): Promise<string> {
     {
       name: 'PBKDF2',
       salt: salt as any, // 繞過 TS 型別檢查
-      iterations: 100000,
+      iterations: 15000,
       hash: 'SHA-256'
     },
     keyMaterial,
