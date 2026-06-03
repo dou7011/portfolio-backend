@@ -6,7 +6,6 @@
 ![Cloudflare D1](https://img.shields.io/badge/Cloudflare%20D1-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
-![Portfolio Backend Cover](./docs/cover.svg)
 
 Portfolio Backend 是一個專為個人作品集網站打造的後端 API 服務，核心目標是提供一套輕量、可維護、易於部署的管理後台基礎。專案以 Cloudflare Workers 作為執行環境，搭配 Hono 建立 API 架構，並使用 Cloudflare D1 儲存使用者、角色、權限與履歷資料。
 
