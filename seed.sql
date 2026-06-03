@@ -1,3 +1,45 @@
+-- ==========================================
+-- 1. 寫入角色資料 (Roles)
+-- ==========================================
+INSERT INTO roles (id, name, description) VALUES 
+(1, 'SUPER_ADMIN', '超級管理員，擁有全部後台權限'),
+(2, 'USER_ADMIN', '帳號與 RBAC 管理者（不含履歷內容維護）'),
+(3, 'CONTENT_EDITOR', '內容編輯者（可維護履歷內容）');
+
+
+-- ==========================================
+-- 2. 寫入權限明細資料 (Permissions)
+-- ==========================================
+INSERT INTO permissions (id, action, description) VALUES 
+(1, 'resume:update', '更新履歷資料'),
+(2, 'users:read', '讀取使用者資料'),
+(3, 'users:write', '建立與更新使用者'),
+(4, 'users:delete', '刪除使用者'),
+(5, 'roles:read', '讀取角色資料'),
+(6, 'roles:write', '建立與更新角色及權限綁定'),
+(7, 'roles:delete', '刪除角色'),
+(8, 'permissions:read', '讀取權限清單');
+
+
+-- ==========================================
+-- 3. 綁定角色擁有的權限 (Role-Permissions)
+-- ==========================================
+-- SUPER_ADMIN (角色 1) 擁有所有權限
+INSERT INTO role_permissions (role_id, permission_id) VALUES 
+(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8);
+
+-- USER_ADMIN (角色 2)：專注使用者/角色/權限管理
+INSERT INTO role_permissions (role_id, permission_id) VALUES
+(2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7), (2, 8);
+
+-- CONTENT_EDITOR (角色 3)：僅維護履歷
+INSERT INTO role_permissions (role_id, permission_id) VALUES
+(3, 1);
+
+
+-- ==========================================
+-- 4. 寫入個人履歷資料 (Resumes)
+-- ==========================================
 -- 寫入中文版資料 (lang = 'zh')
 INSERT INTO resumes (lang, title, summary, skills, experience, education, certifications)
 VALUES (
@@ -21,3 +63,15 @@ VALUES (
   '[{"school": "National Chin-Yi University of Technology", "degree": "Bachelor of Science in Computer Science and Information Engineering", "startDate": "2022/09", "endDate": "2026/06"}]',
   '[{"name": "Microsoft Azure DP-100", "credentialId": "1093-1934", "description": "Designing and Implementing a Data Science Solution on Azure"}, {"name": "Microsoft Azure AZ-900", "credentialId": "H558-0163", "description": "Microsoft Azure Fundamentals"}]'
 );
+
+
+-- ==========================================
+-- 5. 寫入第一位後台使用者 (請先用 npm run gen:seed-user 產生 hash)
+-- ==========================================
+-- 範例：
+-- INSERT INTO users (email, password_hash, is_active)
+-- VALUES ('admin@example.com', '請貼上產生的 saltHex:hashHex', 1);
+--
+-- 指派 SUPER_ADMIN 角色 (role_id = 1)
+-- INSERT INTO user_roles (user_id, role_id)
+-- SELECT id, 1 FROM users WHERE email = 'admin@example.com';
