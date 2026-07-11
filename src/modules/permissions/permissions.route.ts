@@ -4,9 +4,10 @@ import { permissionGuard } from '../../middleware/permissionGuard'
 import { PERMISSIONS } from '../../constants/permissions'
 import { getPermissionsController } from './permissions.controller'
 
+// Permissions 模組路由：提供權限清單查詢入口。
 const permissions = new Hono()
 
-// 全域套用 authGuard (讓這份路由底下所有的 API 都必須先登入)
+// 全域套用 authGuard，僅允許已登入且具權限的使用者查詢。
 permissions.use('*', authGuard)
 
 // 檢視權限列表 (需具備 permissions:read 權限)

@@ -1,3 +1,8 @@
+-- ===============================
+-- Portfolio Backend 資料庫 Schema
+-- 定義使用者、角色、權限與履歷資料的關聯結構。
+-- ===============================
+
 -- 使用者表
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5,15 +10,6 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 使用者與角色樞紐表 (使用者擁有多個角色)
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id INTEGER,
-    role_id INTEGER,
-    PRIMARY KEY (user_id, role_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
 );
 
 -- 角色表
@@ -30,17 +26,22 @@ CREATE TABLE IF NOT EXISTS permissions (
     description TEXT
 );
 
+-- 使用者與角色樞紐表 (使用者擁有多個角色)
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id INTEGER NOT NULL,
+    role_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
 -- 角色與權限樞紐表 (角色擁有哪些權限)
 CREATE TABLE IF NOT EXISTS role_permissions (
-    role_id INTEGER,
-    permission_id INTEGER,
-<<<<<<< HEAD
-    PRIMARY KEY (role_id, permission_id)
-=======
+    role_id INTEGER NOT NULL,
+    permission_id INTEGER NOT NULL,
     PRIMARY KEY (role_id, permission_id),
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
     FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
->>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 );
 
 -- 履歷表

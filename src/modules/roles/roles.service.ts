@@ -1,4 +1,4 @@
-// 📁 src/modules/roles/roles.service.ts
+// Roles 服務，負責角色與權限關聯的建立、更新與查詢。
 import type { D1Database } from '@cloudflare/workers-types'
 
 export type RoleWithPermissions = {

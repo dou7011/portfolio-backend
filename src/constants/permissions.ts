@@ -1,3 +1,4 @@
+// 系統內所有可授權的權限常數，集中管理以避免散落在各處。
 export const PERMISSIONS = {
   RESUME_UPDATE: 'resume:update',
 

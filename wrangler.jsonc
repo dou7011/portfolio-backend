@@ -1,4 +1,6 @@
 {
+  // Portfolio Backend 的 Cloudflare Workers 設定檔。
+  // 這裡集中定義 D1 資料庫綁定與前端允許來源白名單。
   "name": "portfolio-backend",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-18",

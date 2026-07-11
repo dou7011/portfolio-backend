@@ -10,9 +10,10 @@ import {
   deleteRoleController
 } from './roles.controller'
 
+// Roles 模組路由：提供角色與權限綁定的管理入口。
 const roles = new Hono()
 
-// 全域套用 authGuard (讓這份路由底下所有的 API 都必須先登入)
+// 全域套用 authGuard，確保角色管理的所有端點都需要登入。
 roles.use('*', authGuard)
 
 

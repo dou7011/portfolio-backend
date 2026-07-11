@@ -1,3 +1,4 @@
+// Permissions 控制器，提供權限清單查詢的 HTTP 入口。
 import { Context } from 'hono'
 import { getAllPermissionsService } from './permissions.service'
 import type { DbBindings } from '../../types'

@@ -1,3 +1,4 @@
+// Permissions 服務，負責從資料庫讀取系統權限清單。
 import type { D1Database } from '@cloudflare/workers-types'
 
 export type PermissionItem = {

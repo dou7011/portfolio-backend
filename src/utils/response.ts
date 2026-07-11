@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 
+// API 回應格式的統一封裝，讓控制器與中介層回傳格式一致，方便前端串接。
 export type ErrorCode =
   | 'BAD_REQUEST'
   | 'UNAUTHORIZED'

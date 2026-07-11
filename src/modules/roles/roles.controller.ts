@@ -1,4 +1,4 @@
-// 📁 src/modules/roles/roles.controller.ts
+// Roles 控制器，負責角色管理 API 的請求驗證與回應封裝。
 import { Context } from 'hono'
 import { 
   getAllRolesService, 

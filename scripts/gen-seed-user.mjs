@@ -2,6 +2,7 @@ import { randomBytes, pbkdf2Sync } from 'node:crypto';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
+// 產生種子使用者的 password_hash，方便將初始後台帳號寫入 seed.sql。
 const ITERATIONS = 100000;
 const KEY_LENGTH = 32;
 const DIGEST = 'sha256';
