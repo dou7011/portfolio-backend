@@ -1,3 +1,12 @@
+/**
+ * 認證模組路由定義
+ * 
+ * 掛載於 /api/auth（由 src/index.ts 設定前綴）
+ * 
+ * 路由清單：
+ * - POST /api/auth/login  — 公開端點，驗證帳密並回傳 JWT
+ * - GET  /api/auth/me     — 受保護端點，驗證 token 並回傳當前使用者資料
+ */
 import { Hono } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
 import { authGuard } from '../../middleware/authGuard'

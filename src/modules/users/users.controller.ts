@@ -1,3 +1,14 @@
+/**
+ * 使用者模組 Controller 層
+ * 
+ * 職責：處理 HTTP 請求輸入驗證、呼叫 Service 層，並將結果轉換為 HTTP 回應。
+ * 
+ * getUsersController   — GET /api/users，取得所有使用者列表
+ * getUserController    — GET /api/users/:id，取得單一使用者
+ * createUserController — POST /api/users，新增使用者
+ * updateUserController — PUT /api/users/:id，編輯使用者
+ * deleteUserController — DELETE /api/users/:id，刪除使用者
+ */
 import { Context } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
 import { 
@@ -97,6 +108,6 @@ export const deleteUserController = async (c: Context<{ Bindings: Bindings }>) =
     await deleteUserService(c.env.DB, userId);
     return c.json({ success: true, message: '使用者已成功移除！' });
   } catch (error: any) {
-    return c.json({ success: false, message: '移除失敗', error: error.message }, 500);
+    return c.json({ success: false, message: '移除失敗' }, 500);
   }
 }

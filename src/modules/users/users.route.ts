@@ -1,3 +1,16 @@
+/**
+ * 使用者模組路由定義
+ * 
+ * 掛載於 /api/users（由 src/index.ts 設定前綴）
+ * 全部路由皆需通過 authGuard，再由 permissionGuard 進行細粒度授權。
+ * 
+ * 路由清單：
+ * - GET    /api/users        — 需 user:read，取得所有使用者列表
+ * - GET    /api/users/:id    — 需 user:read，取得單一使用者
+ * - POST   /api/users        — 需 user:edit，新增使用者並指派角色
+ * - PUT    /api/users/:id    — 需 user:edit，編輯使用者狀態、密碼與角色
+ * - DELETE /api/users/:id    — 需 user:delete，刪除使用者（CASCADE 清除關聯資料）
+ */
 import { Hono } from 'hono'
 import { authGuard } from '../../middleware/authGuard'
 import { permissionGuard } from '../../middleware/permissionGuard'

@@ -8,5 +8,8 @@
       "database_name": "portfolio-db",
       "database_id": "42dcb812-027b-4ab1-bae4-bf40cef553e3"
     }
-  ]
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:4200,https://portfolio-frontend-4fl.pages.dev"
+  }
 }

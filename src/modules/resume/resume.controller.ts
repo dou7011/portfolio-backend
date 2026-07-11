@@ -1,3 +1,11 @@
+/**
+ * 履歷模組 Controller 層
+ * 
+ * 職責：處理 HTTP 請求的輸入驗證、呼叫 Service 層，並將結果轉換為 HTTP 回應。
+ * 
+ * getResumeController  — 公開讀取指定語言履歷
+ * updateResumeController — 受保護更新履歷（需先通過 authGuard + permissionGuard）
+ */
 import { Context } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
 import { getResumeByLang, updateResume } from './resume.service'
@@ -57,6 +65,10 @@ export const updateResumeController = async (c: Context<{ Bindings: Bindings }>)
         { success: false, message: `找不到語言為 ${lang} 的履歷資料` },
         404
       )
+    }
+    else {
+      // 3.1. 更新履歷資料
+      await updateResume(c.env.DB, { lang, title, summary, skills, experience, education, certifications })
     }
 
     // 4. 成功回傳 (200)

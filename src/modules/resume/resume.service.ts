@@ -1,4 +1,15 @@
+/**
+ * 履歷模組 Service 層
+ * 
+ * 負責與 D1 資料庫互動：
+ * - getResumeByLang：根據語言代碼查詢履歷，並安全地解析 JSON 欄位
+ * - updateResume：先查詢是否存在，再執行 INSERT 或 UPDATE（UPSERT 邏輯）
+ * 
+ * JSON 欄位（skills / experience / education / certifications）
+ * 統一透過 safeJsonParse 處理，避免髒資料導致整支 API 500。
+ */
 import type { D1Database } from '@cloudflare/workers-types'
+import { safeJsonParse } from '../../utils/safeJsonParse'
 
 interface ResumeData {
   lang: string
@@ -27,10 +38,10 @@ export const getResumeByLang = async (db: D1Database, lang: string) => {
   // 解析 JSON 字串回物件
   return {
     ...resume,
-    skills: JSON.parse(resume.skills as string),
-    experience: JSON.parse(resume.experience as string),
-    education: JSON.parse(resume.education as string),
-    certifications: JSON.parse(resume.certifications as string)
+    skills: safeJsonParse(resume.skills, []),
+    experience: safeJsonParse(resume.experience, []),
+    education: safeJsonParse(resume.education, []),
+    certifications: safeJsonParse(resume.certifications, []),
   }
 }
 

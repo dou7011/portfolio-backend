@@ -1,3 +1,9 @@
+/**
+ * 認證模組 Controller 層
+ * 
+ * 職責：處理 HTTP 請求格式驗證、呼叫 Service 層，並將結果轉換為 HTTP 回應。
+ * 此層不含商業邏輯，只負責 I/O 的翻譯與錯誤映射。
+ */
 import { Context } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
 import { loginUserService } from './auth.service'

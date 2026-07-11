@@ -1,3 +1,12 @@
+/**
+ * 履歷模組路由定義
+ * 
+ * 掛載於 /api/resume（由 src/index.ts 設定前綴）
+ * 
+ * 路由清單：
+ * - GET /api/resume/:lang  — 公開端點，讀取指定語言的履歷（lang: 'zh' | 'en'）
+ * - PUT /api/resume        — 受保護端點，需 authGuard + resume:edit 權限，更新履歷內容
+ */
 import { Hono } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
 import { authGuard } from '../../middleware/authGuard'

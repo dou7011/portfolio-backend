@@ -1,12 +1,27 @@
+/**
+ * 使用者模組 Service 層
+ * 
+ * 負責使用者帳號的 CRUD 與 RBAC 角色指派：
+ * - getAllUsersService    ：查詢所有使用者及其角色（子查詢聚合為 JSON）
+ * - getUserByIdService   ：查詢單一使用者及角色
+ * - createUserService    ：新增使用者（PBKDF2 加密密碼、批次指派角色）
+ * - updateUserService    ：更新啟用狀態、可選密碼與角色覆寫
+ * - deleteUserService    ：刪除使用者（依賴 schema ON DELETE CASCADE 清理關聯）
+ * - assignUserRolesService：內部共享函式，全量覆寫使用者角色（先刪後寫）
+ * - fetchUsersFromDB     ：內部共享函式，動態組裝查詢 SQL 並解析結果
+ */
 import type { D1Database } from '@cloudflare/workers-types'
 import { hashPassword } from '../../utils/crypto'
+import { safeJsonParse } from '../../utils/safeJsonParse'
 
-// 定義回傳的使用者型別
+// 定義回傳的使用者型別（含角色陣列，不含密碼雜湊）
 export type UserWithRoles = {
   id: number;
   email: string;
+  /** 1 = 啟用，0 = 停用 */
   is_active: number;
   created_at: string;
+  /** 使用者所屬角色陣列，例如 [{ id: 1, name: 'ADMIN' }] */
   roles: Array<{ id: number; name: string }>;
 }
 
@@ -22,7 +37,7 @@ export const getAllUsersService = async (db: D1Database): Promise<UserWithRoles[
     email: user.email,
     is_active: user.is_active,
     created_at: user.created_at,
-    roles: JSON.parse(user.roles_json as string)
+    roles: safeJsonParse(user.roles_json, []),
   }));
 }
 
@@ -36,6 +51,8 @@ export const getUserByIdService = async (db: D1Database, id: string): Promise<Us
   if (!users || users.length === 0) return null;
 
   const user = users[0];
+  // 注意：此處直接使用 JSON.parse（已確認 fetchUsersFromDB 一定回傳有效 JSON 字串）
+  // 如需更嚴謹的容錯，可改為 safeJsonParse(user.roles_json, [])
   return {
     id: user.id,
     email: user.email,
