@@ -34,13 +34,19 @@ CREATE TABLE IF NOT EXISTS permissions (
 CREATE TABLE IF NOT EXISTS role_permissions (
     role_id INTEGER,
     permission_id INTEGER,
+<<<<<<< HEAD
     PRIMARY KEY (role_id, permission_id)
+=======
+    PRIMARY KEY (role_id, permission_id),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 );
 
 -- 履歷表
 CREATE TABLE IF NOT EXISTS resumes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lang TEXT NOT NULL,
+    lang TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
     summary TEXT,
     skills TEXT,
@@ -49,3 +55,12 @@ CREATE TABLE IF NOT EXISTS resumes (
     certifications TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 效能優化索引
+CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role_id ON role_permissions(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permissions(permission_id);
+
+-- users 與 resumes 的高頻查詢欄位索引
+CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);

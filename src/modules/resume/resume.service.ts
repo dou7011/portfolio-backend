@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * 履歷模組 Service 層
  * 
@@ -10,6 +11,9 @@
  */
 import type { D1Database } from '@cloudflare/workers-types'
 import { safeJsonParse } from '../../utils/safeJsonParse'
+=======
+import type { D1Database } from '@cloudflare/workers-types'
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 
 interface ResumeData {
   lang: string
@@ -38,10 +42,17 @@ export const getResumeByLang = async (db: D1Database, lang: string) => {
   // 解析 JSON 字串回物件
   return {
     ...resume,
+<<<<<<< HEAD
     skills: safeJsonParse(resume.skills, []),
     experience: safeJsonParse(resume.experience, []),
     education: safeJsonParse(resume.education, []),
     certifications: safeJsonParse(resume.certifications, []),
+=======
+    skills: JSON.parse(resume.skills as string),
+    experience: JSON.parse(resume.experience as string),
+    education: JSON.parse(resume.education as string),
+    certifications: JSON.parse(resume.certifications as string)
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
   }
 }
 
@@ -49,6 +60,7 @@ export const getResumeByLang = async (db: D1Database, lang: string) => {
  * 更新或新增履歷資料
  */
 export const updateResume = async (db: D1Database, data: ResumeData) => {
+<<<<<<< HEAD
   const { lang, title, summary, skills, experience, education, certifications } = data
 
   // 先檢查該語言的履歷是否存在
@@ -92,4 +104,30 @@ export const updateResume = async (db: D1Database, data: ResumeData) => {
       lang
     ).run()
   }
+=======
+  const { lang, title, summary, skills, experience, education, certifications } = data;
+
+  // 🌟 使用 ON CONFLICT(lang) DO UPDATE SET 語法
+  // 註：這需要資料庫的 lang 欄位具備 UNIQUE 限制
+  await db.prepare(`
+    INSERT INTO resumes (lang, title, summary, skills, experience, education, certifications, updated_at) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(lang) DO UPDATE SET
+      title = excluded.title,
+      summary = excluded.summary,
+      skills = excluded.skills,
+      experience = excluded.experience,
+      education = excluded.education,
+      certifications = excluded.certifications,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    lang,
+    title ?? null,
+    summary ?? null,
+    skills ? JSON.stringify(skills) : '[]',
+    experience ? JSON.stringify(experience) : '[]',
+    education ? JSON.stringify(education) : '[]',
+    certifications ? JSON.stringify(certifications) : '[]'
+  ).run();
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 }

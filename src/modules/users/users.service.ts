@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * 使用者模組 Service 層
  * 
@@ -22,6 +23,16 @@ export type UserWithRoles = {
   is_active: number;
   created_at: string;
   /** 使用者所屬角色陣列，例如 [{ id: 1, name: 'ADMIN' }] */
+=======
+import type { D1Database } from '@cloudflare/workers-types'
+import { hashPassword } from '../../utils/crypto'
+
+export type UserWithRoles = {
+  id: number;
+  email: string;
+  is_active: number;
+  created_at: string;
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
   roles: Array<{ id: number; name: string }>;
 }
 
@@ -31,13 +42,20 @@ export type UserWithRoles = {
 export const getAllUsersService = async (db: D1Database): Promise<UserWithRoles[]> => {
   // 🌟 修正：直接接住回傳的陣列變數 users
   const users = await fetchUsersFromDB(db);
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
   return users.map((user: any) => ({
     id: user.id,
     email: user.email,
     is_active: user.is_active,
     created_at: user.created_at,
+<<<<<<< HEAD
     roles: safeJsonParse(user.roles_json, []),
+=======
+    roles: JSON.parse(String(user.roles_json || '[]'))
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
   }));
 }
 
@@ -51,20 +69,31 @@ export const getUserByIdService = async (db: D1Database, id: string): Promise<Us
   if (!users || users.length === 0) return null;
 
   const user = users[0];
+<<<<<<< HEAD
   // 注意：此處直接使用 JSON.parse（已確認 fetchUsersFromDB 一定回傳有效 JSON 字串）
   // 如需更嚴謹的容錯，可改為 safeJsonParse(user.roles_json, [])
+=======
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
   return {
     id: user.id,
     email: user.email,
     is_active: user.is_active,
     created_at: user.created_at,
+<<<<<<< HEAD
     roles: JSON.parse(user.roles_json as string)
+=======
+    roles: JSON.parse(String(user.roles_json || '[]'))
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
   };
 }
 
 /**
+<<<<<<< HEAD
  * 新增使用者 (會自動將密碼進行 PBKDF2 加密)
  * @returns 回傳新建立的使用者 ID
+=======
+ * 新增使用者 (會自動將密碼進行 PBKDF2 加密，並可選擇性指派角色)
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
  */
 export const createUserService = async (db: D1Database, email: string, password: string, isActive: number, roleIds?: number[]) => {
   // 1. 檢查信箱是否已存在
@@ -90,7 +119,11 @@ export const createUserService = async (db: D1Database, email: string, password:
 }
 
 /**
+<<<<<<< HEAD
  * 編輯使用者基本資料 (僅限：啟用狀態、可選密碼)
+=======
+ * 編輯使用者基本資料 (僅限：啟用狀態、可選密碼、角色指派)
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
  */
 export const updateUserService = async (db: D1Database, id: string, isActive: number, password?: string, roleIds?: number[]) => {
   // 1. 處理基本資料更新 (狀態與密碼)
@@ -130,7 +163,11 @@ export const deleteUserService = async (db: D1Database, id: string) => {
  * 核心共享函式
  */
 
+<<<<<<< HEAD
 // 全量覆寫使用者的角色樞紐表
+=======
+// 指派角色給使用者 (全量覆寫 user_roles 樞紐表)
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 const assignUserRolesService = async (db: D1Database, userId: string | number, roleIds: number[]) => {
   const statements = [];
 
@@ -164,7 +201,11 @@ const fetchUsersFromDB = async (db: D1Database, id?: string | number): Promise<a
       u.is_active, 
       u.created_at,
       (
+<<<<<<< HEAD
         SELECT json_group_array(json_object('id', r.id, 'name', r.name))
+=======
+        SELECT COALESCE(json_group_array(json_object('id', r.id, 'name', r.name)), '[]')
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
         FROM user_roles ur
         JOIN roles r ON ur.role_id = r.id
         WHERE ur.user_id = u.id

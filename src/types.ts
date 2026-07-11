@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * 全域共用型別定義
  * 
@@ -36,6 +37,27 @@ export type AppEnv = {
   };
   Variables: {
     /** authGuard 驗證通過後注入，後續中介層與 controller 可直接讀取 */
+=======
+import type { D1Database } from '@cloudflare/workers-types'
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  roles: string[];
+  permissions: string[];
+}
+
+export type AppBindings = {
+  DB: D1Database;
+  JWT_SECRET: string;
+}
+
+export type DbBindings = Pick<AppBindings, 'DB'>
+
+export type AppEnv = {
+  Bindings: AppBindings;
+  Variables: {
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
     user: AuthUser;
   };
 }

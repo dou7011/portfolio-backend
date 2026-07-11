@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * 認證模組 Service 層
  * 
@@ -9,18 +10,25 @@
  * 
  * 此層不處理 HTTP 細節，只接受純參數，回傳結果或丟出錯誤碼字串。
  */
+=======
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 import { sign } from 'hono/jwt'
 import type { D1Database } from '@cloudflare/workers-types'
 import { verifyPassword } from '../../utils/crypto'
 
 /**
  * 處理登入的核心商業邏輯
+<<<<<<< HEAD
  * @param db        - D1 資料庫實例
  * @param jwtSecret - JWT 簽章密鑰（來自環境變數）
  * @param email     - 使用者輸入的信箱
  * @param pass      - 使用者輸入的明文密碼
  * @returns 成功時回傳簽發的 JWT Token 字串
  * @throws 'AUTH_FAILED' — 帳號不存在、未啟用或密碼錯誤時丟出
+=======
+ * @returns 成功時回傳簽發的 JWT Token 字串
+ * @throws 失敗時丟出對應的錯誤訊息字串
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
  */
 export const loginUserService = async (db: D1Database, jwtSecret: string, email: string, pass: string): Promise<string> => {
   // 資料庫找這個 email
@@ -49,6 +57,7 @@ export const loginUserService = async (db: D1Database, jwtSecret: string, email:
 
   // 建立負載並簽發 JWT Token
   const payload = {
+<<<<<<< HEAD
     iss: 'portfolio-backend',  // 簽發者
     aud: 'portfolio-frontend',  // 接收者
     iat: Math.floor(Date.now() / 1000),  // 簽發時間
@@ -57,6 +66,11 @@ export const loginUserService = async (db: D1Database, jwtSecret: string, email:
     exp: exp,
     id: user.id,
     email: user.email,
+=======
+    id: user.id,
+    email: user.email,
+    exp: exp,
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
   };
 
   const token = await sign(payload, jwtSecret, 'HS256');

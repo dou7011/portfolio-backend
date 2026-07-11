@@ -9,6 +9,7 @@
  */
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+<<<<<<< HEAD
 import type { D1Database } from '@cloudflare/workers-types'
 import authApp from './modules/auth/auth.route'
 import resumeApp from './modules/resume/resume.route'
@@ -25,6 +26,16 @@ type Bindings = {
 }
 
 const app = new Hono<{ Bindings: Bindings }>({ strict: false })
+=======
+import authApp from './modules/auth/auth.route'
+import resumeApp from './modules/resume/resume.route'
+import usersApp from './modules/users/users.route'
+import rolesApp from './modules/roles/roles.route'
+import permissionsApp from './modules/permissions/permissions.route'
+import type { AppEnv } from './types'
+
+const app = new Hono<AppEnv>({ strict: false })
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 
 // 全域啟用 CORS（所有路由 /*）
 app.use(
@@ -59,9 +70,18 @@ app.use(
 // 健康檢查端點（無需驗證，供 Cloudflare 監控或前端確認服務狀態）
 app.get('/', (c) => c.text('Portfolio Backend 運作正常！'))
 
+<<<<<<< HEAD
 // 子路由模組掛載（各模組路由定義在 src/modules/*/）
 app.route('/api/auth', authApp)     // 所有發往 /api/auth/* 的請求會進到 auth.route.ts
 app.route('/api/resume', resumeApp) // 所有發往 /api/resume/* 的請求會進到 resume.route.ts
 app.route('/api/users', usersApp)   // 所有發往 /api/users/* 的請求會進到 users.route.ts
+=======
+// 核心路由對接 (將子模組掛載到指定的網址前綴)
+app.route('/api/auth', authApp)     // 所有發往 /api/auth/* 的請求會進到 auth.route.ts
+app.route('/api/resume', resumeApp) // 所有發往 /api/resume/* 的請求會進到 resume.route.ts
+app.route('/api/users', usersApp)   // 所有發往 /api/users/* 的請求會進到 users.route.ts
+app.route('/api/roles', rolesApp)   // 所有發往 /api/roles/* 的請求會進到 roles.route.ts
+app.route('/api/permissions', permissionsApp)
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 
 export default app

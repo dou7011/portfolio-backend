@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * 認證模組路由定義
  * 
@@ -19,6 +20,14 @@ type Bindings = {
 }
 
 const auth = new Hono<{ Bindings: Bindings }>({ strict: false })
+=======
+import { Hono } from 'hono'
+import { authGuard } from '../../middleware/authGuard'
+import { loginController, getMeController } from './auth.controller'
+import type { AppEnv } from '../../types'
+
+const auth = new Hono<AppEnv>({ strict: false })
+>>>>>>> 6acacb3225d1aa4d7493b93905aabae99c081e77
 
 // 登入路由
 auth.post('/login', loginController);
