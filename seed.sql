@@ -1,3 +1,40 @@
+-- ==========================================
+-- 1. 寫入角色資料 (Roles)
+-- ==========================================
+INSERT INTO roles (id, name, description) VALUES 
+(1, 'ADMIN', '管理員，擁有系統最高權限'),
+(2, 'HR', '人資面試官，可讀取隱藏資料');
+
+
+-- ==========================================
+-- 2. 寫入權限明細資料 (Permissions)
+-- ==========================================
+INSERT INTO permissions (id, action, description) VALUES 
+(1, 'resume:read', '讀取履歷資料'),
+(2, 'resume:edit', '新增與修改履歷資料'),
+(3, 'user:read', '讀取使用者資料'),
+(4, 'user:edit', '編輯使用者資料'),
+(5, 'user:delete', '刪除使用者資料'),
+(6, 'blog:create', '發布部落格文章'),
+(7, 'blog:edit', '編輯部落格文章'),
+(8, 'blog:delete', '刪除部落格文章');
+
+
+-- ==========================================
+-- 3. 綁定角色擁有的權限 (Role-Permissions)
+-- ==========================================
+-- ADMIN (角色 1) 擁有所有權限 (1~5)
+INSERT INTO role_permissions (role_id, permission_id) VALUES 
+(1, 1), (1, 2), (1, 3), (1, 4), (1, 5);
+
+-- HR (角色 2) 只能讀履歷(1)
+INSERT INTO role_permissions (role_id, permission_id) VALUES 
+(2, 1);
+
+
+-- ==========================================
+-- 4. 寫入個人履歷資料 (Resumes)
+-- ==========================================
 -- 寫入中文版資料 (lang = 'zh')
 INSERT INTO resumes (lang, title, summary, skills, experience, education, certifications)
 VALUES (

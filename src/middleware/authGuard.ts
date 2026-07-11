@@ -1,45 +1,71 @@
-import { Context, Next } from 'hono'
-import { verify } from 'hono/jwt'
+import { Next, Context } from 'hono'
 import type { D1Database } from '@cloudflare/workers-types'
+import { verify } from 'hono/jwt'
 
-export const authGuard = async (c: Context, next: Next) => {
-  // 1. 取得 Header 中的 Authorization
+// 1. 外部環境綁定
+type Bindings = {
+  DB: D1Database
+  JWT_SECRET: string
+}
+
+// 2. 跨中介層傳遞的變數型別
+type Variables = {
+  user: {
+    id: number
+    email: string
+    roles: string[]
+    permissions: string[]
+  }
+}
+
+// 3. 🌟 Hono 官方標準的 Env 組裝方式
+type HonoEnv = {
+  Bindings: Bindings
+  Variables: Variables
+}
+
+export const authGuard = async (c: Context<HonoEnv>, next: Next) => {
   const authHeader = c.req.header('Authorization')
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ success: false, message: '未提供授權 Token 或格式錯誤' }, 401)
+    return c.json({ success: false, message: '未提供授權憑證' }, 401)
   }
 
-  // 取出 Bearer 後面的 Token 字串
   const token = authHeader.split(' ')[1]
 
   try {
-    // 2. 驗證 Token 是否是由我們的 JWT_SECRET 簽發的，且是否過期
-    // 如果過期或被竄改，這裡會直接報錯跳到 catch
-    const decodedPayload = await verify(token, c.env.JWT_SECRET as string, 'HS256')
-    const userId = decodedPayload.id as number
+    const decodedPayload = await verify(token, c.env.JWT_SECRET, 'HS256') as { id: number }
+    const userId = decodedPayload.id
 
-    // 3. 【核心防護】即時打資料庫，確保權限是最新的
-    const db = c.env.DB as D1Database
-    const user = await db.prepare(
-      `SELECT role, is_active FROM users WHERE id = ?`
-    ).bind(userId).first<{ role: string, is_active: number }>()
+    const { results } = await c.env.DB.prepare(`
+      SELECT 
+        u.id, u.email, u.is_active, 
+        r.name AS role_name, 
+        p.action AS permission_action
+      FROM users u
+      LEFT JOIN user_roles ur ON u.id = ur.user_id
+      LEFT JOIN roles r ON ur.role_id = r.id
+      LEFT JOIN role_permissions rp ON r.id = rp.role_id
+      LEFT JOIN permissions p ON rp.permission_id = p.id
+      WHERE u.id = ?
+    `).bind(userId).all();
 
-    if (!user) {
-      return c.json({ success: false, message: '找不到該帳號' }, 401)
-    }
+    if (!results || results.length === 0) return c.json({ success: false, message: '帳號不存在' }, 401);
 
-    if (user.is_active === 0) {
-      return c.json({ success: false, message: '帳號已被停用，強制登出' }, 403)
-    }
+    const row = results[0] as any;
+    if (row.is_active === 0) return c.json({ success: false, message: '帳號已被停用' }, 403);
 
-    if (user.role !== 'ADMIN') {
-      return c.json({ success: false, message: '權限不足，必須為管理員' }, 403)
-    }
+    const roles = [...new Set(results.map((r: any) => r.role_name).filter(Boolean))];
+    const permissions = [...new Set(results.map((r: any) => r.permission_action).filter(Boolean))];
 
-    // 4. 驗證全數通過，放行到下一個 API 動作
-    await next()
+    c.set('user', {
+      id: Number(row.id),
+      email: String(row.email),
+      roles,
+      permissions
+    });
 
-  } catch (error: any) {
-    return c.json({ success: false, message: 'Token 無效或已過期，請重新登入' }, 401)
+    await next();
+  } catch (error) {
+    return c.json({ success: false, message: '憑證無效或已過期' }, 401)
   }
 }

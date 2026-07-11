@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { D1Database } from '@cloudflare/workers-types'
-import authApp from './routes/auth'
-import resumeApp from './routes/resume'
+import authApp from './modules/auth/auth.route'
+import resumeApp from './modules/resume/resume.route'
+import usersApp from './modules/users/users.route'
 
 type Bindings = {
   DB: D1Database
@@ -34,7 +35,7 @@ app.use(
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     
-    // 如果您的前端 Angular 有設定 withCredentials: true，後端這裡就必須設為 true
+    // 如果前端 Angular 有設定 withCredentials: true，後端這裡就必須設為 true
     credentials: true, 
   })
 )
@@ -42,8 +43,9 @@ app.use(
 // 基礎網頁測試
 app.get('/', (c) => c.text('Portfolio Backend 運作正常！'))
 
-// 🔌 核心路由對接 (將子模組掛載到指定的網址前綴)
-app.route('/api/auth', authApp)     // 所有發往 /api/auth/* 的請求會進到 auth.ts
-app.route('/api/resume', resumeApp) // 所有發往 /api/resume/* 的請求會進到 resume.ts
+// 核心路由對接 (將子模組掛載到指定的網址前綴)
+app.route('/api/auth', authApp)     // 所有發往 /api/auth/* 的請求會進到 auth.route.ts
+app.route('/api/resume', resumeApp) // 所有發往 /api/resume/* 的請求會進到 resume.route.ts
+app.route('/api/users', usersApp)   // 所有發往 /api/users/* 的請求會進到 users.route.ts
 
 export default app
