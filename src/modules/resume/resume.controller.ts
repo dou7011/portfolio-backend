@@ -2,6 +2,7 @@
 import { Context } from 'hono'
 import { getResumeByLang, updateResume } from './resume.service'
 import type { AppEnv } from '../../types'
+import { logger } from '../../utils/logger'
 import { fail, ok } from '../../utils/response'
 
 /**

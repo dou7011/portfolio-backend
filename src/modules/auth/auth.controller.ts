@@ -2,6 +2,7 @@
 import { Context } from 'hono'
 import { loginUserService } from './auth.service'
 import type { AppEnv } from '../../types'
+import { logger } from '../../utils/logger'
 import { fail, ok } from '../../utils/response'
 
 /**
@@ -19,6 +20,7 @@ export const loginController = async (c: Context<AppEnv>) => {
     const token = await loginUserService(c.env.DB, c.env.JWT_SECRET, email, password)
     return ok(c, { message: '登入成功', data: { token } })
   } catch (error: any) {
+    logger.error('loginController', error)
     if (error.message === 'AUTH_FAILED') {
       return fail(c, 401, 'UNAUTHORIZED', '帳號或密碼錯誤')
     }

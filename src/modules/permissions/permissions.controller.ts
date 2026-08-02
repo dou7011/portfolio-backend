@@ -2,6 +2,7 @@
 import { Context } from 'hono'
 import { getAllPermissionsService } from './permissions.service'
 import type { DbBindings } from '../../types'
+import { logger } from '../../utils/logger'
 import { fail, ok } from '../../utils/response'
 
 /**
@@ -12,6 +13,7 @@ export const getPermissionsController = async (c: Context<{ Bindings: DbBindings
     const permissions = await getAllPermissionsService(c.env.DB);
     return ok(c, { data: permissions });
   } catch (error: any) {
+    logger.error('getPermissionsController', error)
     return fail(c, 500, 'INTERNAL_ERROR', '系統錯誤，請稍後再試');
   }
 }

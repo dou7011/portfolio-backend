@@ -39,6 +39,7 @@ Portfolio Backend 是一個專為個人作品集網站打造的後端 API 服務
 - API 回應格式統一：
   - 成功：`{ success: true, message?, data? }`
   - 失敗：`{ success: false, code, message }`
+- 錯誤日誌與 JSON 解析已統一封裝，避免單筆異常資料導致整體 API 失敗
 
 ### 架構說明
 
@@ -94,7 +95,9 @@ portfolio-backend/
     │   └── permissions.ts            # 系統權限常數定義（集中管理）
     └── utils/                        # 共用工具函式
         ├── crypto.ts                 # 密碼雜湊/驗證工具
-        └── response.ts               # 統一回應格式 helper
+        ├── logger.ts                 # 結構化錯誤日誌工具
+        ├── response.ts               # 統一回應格式 helper
+        └── safeJsonParse.ts          # 安全 JSON 解析工具
 ```
 
 ## 資料庫設計
@@ -177,10 +180,12 @@ npm run gen:seed-user
 `wrangler.jsonc` 目前主要綁定：
 
 - `DB`：D1 Database Binding
+- `ALLOWED_ORIGINS`：允許跨域來源白名單
 
 必要環境變數：
 
 - `JWT_SECRET`：JWT 簽章密鑰
+- `ALLOWED_ORIGINS`：可選，若未使用 `wrangler.jsonc` 的 vars 也可在部署環境中設定
 
 ## CORS 設定
 
@@ -210,6 +215,101 @@ npm run gen:seed-user
 | PUT | `/api/roles/:id` | Bearer + `roles:write` | 更新角色 |
 | DELETE | `/api/roles/:id` | Bearer + `roles:delete` | 刪除角色 |
 | GET | `/api/permissions` | Bearer + `permissions:read` | 取得系統權限列表 |
+
+## API 快速指南
+
+完整規格請見 [docs/API_SPEC.md](./docs/API_SPEC.md)。以下提供最常用的端點範例，方便前端快速接入。
+
+### 1. Base URL 與認證
+
+- 開發環境：`http://localhost:8787`
+- 受保護 API 需帶上：`Authorization: Bearer <token>`
+
+### 2. 登入
+
+```bash
+curl -X POST http://localhost:8787/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"your-password"}'
+```
+
+成功回應：
+
+```json
+{
+  "success": true,
+  "message": "登入成功",
+  "data": {
+    "token": "<jwt-token>"
+  }
+}
+```
+
+### 3. 取得目前登入者資訊
+
+```bash
+curl http://localhost:8787/api/auth/me \
+  -H 'Authorization: Bearer <token>'
+```
+
+### 4. 取得履歷
+
+```bash
+curl http://localhost:8787/api/resume/zh
+```
+
+### 5. 更新履歷
+
+```bash
+curl -X PUT http://localhost:8787/api/resume \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "lang": "zh",
+    "title": "我的履歷",
+    "summary": "簡介",
+    "skills": [],
+    "experience": [],
+    "education": [],
+    "certifications": []
+  }'
+```
+
+### 6. 建立使用者
+
+```bash
+curl -X POST http://localhost:8787/api/users \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "new-user@example.com",
+    "password": "password123",
+    "isActive": 1,
+    "roleIds": [1]
+  }'
+```
+
+### 7. 回應格式
+
+成功回應範例：
+
+```json
+{
+  "success": true,
+  "message": "操作成功",
+  "data": {}
+}
+```
+
+錯誤回應範例：
+
+```json
+{
+  "success": false,
+  "code": "UNAUTHORIZED",
+  "message": "未提供授權憑證"
+}
+```
 
 ## RBAC 權限重設（2026-06）
 
@@ -280,6 +380,7 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 2. 受保護 API 以 `Authorization: Bearer <token>` 夾帶 token
 3. `authGuard` 驗證 token 並載入使用者權限
 4. `permissionGuard` 檢查路由所需權限
+
 ## 部署
 
 ```bash
@@ -295,3 +396,16 @@ npm run deploy
 ## 授權條款
 
 目前專案尚未附上 LICENSE。若要公開發佈，建議新增 `LICENSE` 檔案。
+
+## 目前狀態與後續建議
+
+目前專案已具備完整的後端基礎架構，包含：
+- JWT 驗證與 RBAC 授權
+- 使用者 / 角色 / 權限 / 履歷管理
+- 統一 API 回應格式
+- 結構化錯誤日誌與安全 JSON 解析
+
+建議後續可持續強化的項目：
+- 登入速率限制
+- 更細緻的請求追蹤與日誌上下文
+- authGuard 權限查詢的快取與效能優化

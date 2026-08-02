@@ -9,6 +9,7 @@ import {
   assignRolePermissionsService 
 } from './roles.service'
 import type { DbBindings } from '../../types'
+import { logger } from '../../utils/logger'
 import { fail, ok, created } from '../../utils/response'
 
 /**
@@ -19,7 +20,7 @@ export const getRolesController = async (c: Context<{ Bindings: DbBindings }>) =
     const roles = await getAllRolesService(c.env.DB);
     return ok(c, { data: roles });
   } catch (error: any) {
-    console.error('🚨 [Get Roles Error]:', error.message);
+    logger.error('getRolesController', error);
     return fail(c, 500, 'INTERNAL_ERROR', '系統錯誤');
   }
 }
@@ -41,6 +42,7 @@ export const getRoleController = async (c: Context<{ Bindings: DbBindings }>) =>
 
     return ok(c, { data: role });
   } catch (error: any) {
+    logger.error('getRoleController', error);
     return fail(c, 500, 'INTERNAL_ERROR', '獲取角色失敗');
   }
 }
@@ -56,6 +58,7 @@ export const createRoleController = async (c: Context<{ Bindings: DbBindings }>)
     await createRoleService(c.env.DB, body.name, body.description, body.permissionIds);
     return created(c, { message: '角色建立與權限指派成功！' });
   } catch (error: any) {
+    logger.error('createRoleController', error);
     if (error.message === 'ROLE_ALREADY_EXISTS') return fail(c, 409, 'CONFLICT', '該角色名稱已存在');
     return fail(c, 500, 'INTERNAL_ERROR', '系統錯誤');
   }
@@ -75,6 +78,7 @@ export const updateRoleController = async (c: Context<{ Bindings: DbBindings }>)
     await updateRoleService(c.env.DB, roleId, body.name, body.description, body.permissionIds);
     return ok(c, { message: '角色更新與權限指派成功！' });
   } catch (error: any) {
+    logger.error('updateRoleController', error);
     if (error.message === 'ROLE_ALREADY_EXISTS') return fail(c, 409, 'CONFLICT', '名稱與其他角色衝突');
     return fail(c, 500, 'INTERNAL_ERROR', '系統錯誤');
   }
@@ -91,6 +95,7 @@ export const deleteRoleController = async (c: Context<{ Bindings: DbBindings }>)
     await deleteRoleService(c.env.DB, roleId);
     return ok(c, { message: '角色已成功移除！' });
   } catch (error: any) {
+    logger.error('deleteRoleController', error);
     return fail(c, 500, 'INTERNAL_ERROR', '系統錯誤');
   }
 }

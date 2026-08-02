@@ -1,5 +1,6 @@
 // Roles 服務，負責角色與權限關聯的建立、更新與查詢。
 import type { D1Database } from '@cloudflare/workers-types'
+import { safeJsonParse } from '../../utils/safeJsonParse'
 
 export type RoleWithPermissions = {
   id: number;
@@ -16,7 +17,7 @@ export const getAllRolesService = async (db: D1Database): Promise<RoleWithPermis
     id: role.id,
     name: role.name,
     description: role.description,
-    permissions: JSON.parse(String(role.permissions_json || '[]'))
+    permissions: safeJsonParse(role.permissions_json, [])
   }));
 }
 
@@ -34,7 +35,7 @@ export const getRoleByIdService = async (db: D1Database, id: string): Promise<Ro
     id: role.id,
     name: role.name,
     description: role.description,
-    permissions: JSON.parse(String(role.permissions_json || '[]'))
+    permissions: safeJsonParse(role.permissions_json, [])
   };
 }
 
