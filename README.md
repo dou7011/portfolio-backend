@@ -6,118 +6,65 @@
 ![Cloudflare D1](https://img.shields.io/badge/Cloudflare%20D1-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
+Portfolio Backend 是一個以 Cloudflare Workers + Hono 建立的輕量後端服務，主要用於個人作品集、簡歷網站與後台管理系統。專案結合 JWT 身分驗證、RBAC 權限控制、D1 資料庫與統一 API 回應格式，提供可直接延伸的後端基礎架構。
 
-Portfolio Backend 是一個專為個人作品集網站打造的後端 API 服務，核心目標是提供一套輕量、可維護、易於部署的管理後台基礎。專案以 Cloudflare Workers 作為執行環境，搭配 Hono 建立 API 架構，並使用 Cloudflare D1 儲存使用者、角色、權限與履歷資料。
+## 主要功能
 
-此專案不只是單純的履歷讀取 API，而是包含登入驗證、RBAC 權限控管、後台資料維護、標準化 API 回應格式與模組化程式結構的完整後端基礎。若前端是作品集網站、履歷網站或小型管理後台，這個專案可以作為直接延伸的起點。
-
-此專案主要提供：
-
-- 管理員登入與 JWT 驗證
-- 角色與權限控管（RBAC）
-- 使用者管理（Users CRUD）
-- 角色管理（Roles CRUD）
-- 權限清單查詢（Permissions Read）
-- 多語系履歷資料查詢與更新
-
-適合作為個人作品集網站的後台服務，提供安全、模組化、可擴充的 API 基礎。
+- 使用者登入與 JWT 驗證
+- RBAC 權限模型：users / roles / permissions / resume
+- 使用者、角色與權限管理 CRUD
+- 多語系履歷內容讀取與更新
+- 統一錯誤處理與 API 回應格式
+- Cloudflare D1 本地開發與部署整合
 
 ## 技術棧
 
-- Runtime：Cloudflare Workers
-- Framework：Hono
-- Database：Cloudflare D1（SQLite）
-- Language：TypeScript
-- Authentication：JWT（HS256）
-- Password Hashing：Web Crypto PBKDF2
+- Runtime: Cloudflare Workers
+- Framework: Hono
+- Database: Cloudflare D1 (SQLite)
+- Language: TypeScript
+- Auth: JWT (HS256)
+- Password hashing: Web Crypto PBKDF2
 
-## 專案特色
-
-- 模組化架構：`auth`、`resume`、`users`、`roles`、`permissions`
-- 中介層驗證鏈：`authGuard` + `permissionGuard`
-- RBAC 權限模型：`users` <-> `roles` <-> `permissions`
-- API 回應格式統一：
-  - 成功：`{ success: true, message?, data? }`
-  - 失敗：`{ success: false, code, message }`
-- 錯誤日誌與 JSON 解析已統一封裝，避免單筆異常資料導致整體 API 失敗
-
-### 架構說明
-
-1. 前端透過 HTTP 呼叫 Workers API。
-2. API 入口由 `src/index.ts` 統一掛載各模組路由。
-3. 受保護路由先經過 `authGuard` 驗證 JWT，再由 `permissionGuard` 檢查權限。
-4. controller 負責處理 request / response，service 負責商業邏輯與資料庫操作。
-5. 所有模組共用 `response.ts` 統一 API 回應格式。
-
-## 專案結構
+## 專案目錄
 
 ```text
 portfolio-backend/
-├── .dev.vars                         # 本機開發環境變數（請勿提交真實密鑰）
-├── .gitignore                        # Git 忽略規則
-├── package.json                      # 專案腳本與依賴
-├── package-lock.json                 # npm 版本鎖定檔
-├── tsconfig.json                     # TypeScript 編譯設定
-├── wrangler.jsonc                    # Cloudflare Workers 與 D1 綁定設定
-├── schema.sql                        # 資料庫 schema 與索引
-├── seed.sql                          # 初始化測試資料
-├── README.md                         # 專案說明（本檔）
-├── docs/                             # 文件與靜態資源
-│   └── API_SPEC.md                   # 提供前端串接的完整 API 規格
-└── src/                              # 應用程式原始碼
-    ├── index.ts                      # App 入口：CORS 設定與路由掛載
-    ├── types.ts                      # 共用型別（AppEnv、Bindings、AuthUser）
-    ├── middleware/                   # Hono 中介層（驗證與授權）
-    │   ├── authGuard.ts              # JWT 驗證與使用者權限載入
-    │   └── permissionGuard.ts        # 權限檢查
-    ├── modules/                      # 功能模組（路由、控制器、服務）
-    │   ├── auth/                     # 登入與當前使用者資訊
-    │   │   ├── auth.route.ts         # auth 模組路由定義
-    │   │   ├── auth.controller.ts    # auth 請求/回應控制
-    │   │   └── auth.service.ts       # auth 商業邏輯與資料庫操作
-    │   ├── resume/                   # 履歷查詢與更新
-    │   │   ├── resume.route.ts       # resume 模組路由定義
-    │   │   ├── resume.controller.ts  # resume 請求/回應控制
-    │   │   └── resume.service.ts     # resume 商業邏輯與資料庫操作
-    │   ├── users/                    # 使用者管理
-    │   │   ├── users.route.ts        # users 模組路由定義
-    │   │   ├── users.controller.ts   # users 請求/回應控制
-    │   │   └── users.service.ts      # users 商業邏輯與資料庫操作
-    │   ├── roles/                    # 角色管理
-    │   │   ├── roles.route.ts        # roles 模組路由定義
-    │   │   ├── roles.controller.ts   # roles 請求/回應控制
-    │   │   └── roles.service.ts      # roles 商業邏輯與資料庫操作
-    │   └── permissions/              # 權限清單查詢
-    │       ├── permissions.route.ts  # permissions 模組路由定義
-    │       ├── permissions.controller.ts # permissions 請求/回應控制
-    │       └── permissions.service.ts # permissions 商業邏輯與資料庫操作
-    ├── constants/                    # 系統常數
-    │   └── permissions.ts            # 系統權限常數定義（集中管理）
-    └── utils/                        # 共用工具函式
-        ├── crypto.ts                 # 密碼雜湊/驗證工具
-        ├── logger.ts                 # 結構化錯誤日誌工具
-        ├── response.ts               # 統一回應格式 helper
-        └── safeJsonParse.ts          # 安全 JSON 解析工具
+├── docs/
+│   └── API_SPEC.md
+├── scripts/
+│   └── gen-seed-user.mjs
+├── src/
+│   ├── constants/
+│   │   └── permissions.ts
+│   ├── middleware/
+│   │   ├── authGuard.ts
+│   │   └── permissionGuard.ts
+│   ├── modules/
+│   │   ├── auth/
+│   │   ├── permissions/
+│   │   ├── resume/
+│   │   ├── roles/
+│   │   └── users/
+│   ├── utils/
+│   │   ├── crypto.ts
+│   │   ├── logger.ts
+│   │   ├── response.ts
+│   │   └── safeJsonParse.ts
+│   ├── index.ts
+│   └── types.ts
+├── .dev.vars
+├── .gitignore
+├── package.json
+├── README.md
+├── schema.sql
+├── seed.sql
+├── tsconfig.json
+├── wrangler.jsonc
+└── package-lock.json
 ```
 
-## 資料庫設計
-
-主要資料表：
-
-- `users`：帳號資訊（`email`、`password_hash`、`is_active`）
-- `roles`：角色定義
-- `permissions`：權限定義
-- `user_roles`：使用者與角色關聯
-- `role_permissions`：角色與權限關聯
-- `resumes`：多語系履歷資料
-
-設計重點：
-
-- `users.email` 唯一
-- `resumes.lang` 唯一（每個語系一筆資料）
-- 關聯表與高頻查詢欄位已建立索引，提升授權與查詢效能
-
-## 本地開發
+## 安裝與啟動
 
 ### 1. 安裝依賴
 
@@ -131,7 +78,7 @@ npm install
 npx wrangler d1 execute portfolio-db --local --file=./schema.sql
 ```
 
-### 3. 匯入測試資料
+### 3. 匯入種子資料
 
 ```bash
 npx wrangler d1 execute portfolio-db --local --file=./seed.sql
@@ -145,7 +92,7 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 npx wrangler secret put JWT_SECRET
 ```
 
-本機開發可使用 `.dev.vars`，但請勿提交真實敏感資訊到 GitHub。
+本機也可使用 `.dev.vars`，但請不要把真實機密提交到 Git。
 
 ### 5. 啟動開發伺服器
 
@@ -153,167 +100,38 @@ npx wrangler secret put JWT_SECRET
 npm run dev
 ```
 
-預設網址：`http://localhost:8787`
+開發伺服器預設在：
+
+```text
+http://localhost:8787
+```
 
 ## 可用腳本
 
 | 指令 | 說明 |
 | --- | --- |
-| `npm run dev` | 啟動本地 Workers 開發伺服器 |
-| `npm run deploy` | 部署至 Cloudflare Workers（含 minify） |
+| `npm run dev` | 啟動 Cloudflare Workers 本地開發伺服器 |
+| `npm run deploy` | 部署至 Cloudflare Workers |
 | `npm run cf-typegen` | 產生 Cloudflare bindings 型別 |
-| `npm run gen:seed-user` | 互動產生第一位使用者的 `password_hash` 與 seed SQL 片段 |
+| `npm run gen:seed-user` | 產生初始帳號的 password hash 與 seed SQL |
 
-### 產生 seed 用初始帳號密碼
+## 環境變數與 CORS
 
-```bash
-npm run gen:seed-user
-```
+`wrangler.jsonc` 目前設定了：
 
-執行後會要求輸入 email 與密碼，並輸出：
+- `DB`: D1 資料庫 binding
+- `ALLOWED_ORIGINS`: 可接受的前端來源白名單
 
-- `saltHex:hashHex` 格式的 `password_hash`
-- 可直接貼到 `seed.sql` 的 `INSERT` 片段
+必要設定：
 
-## 環境設定
+- `JWT_SECRET`
+- `ALLOWED_ORIGINS`（若不使用 `wrangler.jsonc` 的 vars，請在部署環境中設定）
 
-`wrangler.jsonc` 目前主要綁定：
+CORS 會在 `src/index.ts` 全域啟用，並依白名單判斷可接受來源。
 
-- `DB`：D1 Database Binding
-- `ALLOWED_ORIGINS`：允許跨域來源白名單
+## RBAC 權限模型
 
-必要環境變數：
-
-- `JWT_SECRET`：JWT 簽章密鑰
-- `ALLOWED_ORIGINS`：可選，若未使用 `wrangler.jsonc` 的 vars 也可在部署環境中設定
-
-## CORS 設定
-
-專案於 `src/index.ts` 內全域啟用 CORS，並以白名單控管允許來源。
-
-上線前請依前端部署網域更新白名單。
-
-## API 一覽
-
-完整前端串接規格請見 [docs/API_SPEC.md](./docs/API_SPEC.md)。
-
-| 方法 | 路徑 | 驗證需求 | 說明 |
-| --- | --- | --- | --- |
-| GET | `/` | 無 | 健康檢查 |
-| POST | `/api/auth/login` | 無 | 登入並取得 token（`data.token`） |
-| GET | `/api/auth/me` | Bearer Token | 取得目前登入者資料 |
-| GET | `/api/resume/:lang` | 無 | 依語系取得履歷（`zh` / `en`） |
-| PUT | `/api/resume` | Bearer + `resume:update` | 更新履歷 |
-| GET | `/api/users` | Bearer + (`users:read` 或 `users:write`) | 取得使用者列表 |
-| GET | `/api/users/:id` | Bearer + (`users:read` 或 `users:write`) | 取得單一使用者 |
-| POST | `/api/users` | Bearer + `users:write` | 建立使用者 |
-| PUT | `/api/users/:id` | Bearer + `users:write` | 更新使用者 |
-| DELETE | `/api/users/:id` | Bearer + `users:delete` | 刪除使用者 |
-| GET | `/api/roles` | Bearer + (`roles:read` 或 `roles:write`) | 取得角色列表 |
-| GET | `/api/roles/:id` | Bearer + (`roles:read` 或 `roles:write`) | 取得單一角色 |
-| POST | `/api/roles` | Bearer + `roles:write` | 建立角色 |
-| PUT | `/api/roles/:id` | Bearer + `roles:write` | 更新角色 |
-| DELETE | `/api/roles/:id` | Bearer + `roles:delete` | 刪除角色 |
-| GET | `/api/permissions` | Bearer + `permissions:read` | 取得系統權限列表 |
-
-## API 快速指南
-
-完整規格請見 [docs/API_SPEC.md](./docs/API_SPEC.md)。以下提供最常用的端點範例，方便前端快速接入。
-
-### 1. Base URL 與認證
-
-- 開發環境：`http://localhost:8787`
-- 受保護 API 需帶上：`Authorization: Bearer <token>`
-
-### 2. 登入
-
-```bash
-curl -X POST http://localhost:8787/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"admin@example.com","password":"your-password"}'
-```
-
-成功回應：
-
-```json
-{
-  "success": true,
-  "message": "登入成功",
-  "data": {
-    "token": "<jwt-token>"
-  }
-}
-```
-
-### 3. 取得目前登入者資訊
-
-```bash
-curl http://localhost:8787/api/auth/me \
-  -H 'Authorization: Bearer <token>'
-```
-
-### 4. 取得履歷
-
-```bash
-curl http://localhost:8787/api/resume/zh
-```
-
-### 5. 更新履歷
-
-```bash
-curl -X PUT http://localhost:8787/api/resume \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "lang": "zh",
-    "title": "我的履歷",
-    "summary": "簡介",
-    "skills": [],
-    "experience": [],
-    "education": [],
-    "certifications": []
-  }'
-```
-
-### 6. 建立使用者
-
-```bash
-curl -X POST http://localhost:8787/api/users \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "email": "new-user@example.com",
-    "password": "password123",
-    "isActive": 1,
-    "roleIds": [1]
-  }'
-```
-
-### 7. 回應格式
-
-成功回應範例：
-
-```json
-{
-  "success": true,
-  "message": "操作成功",
-  "data": {}
-}
-```
-
-錯誤回應範例：
-
-```json
-{
-  "success": false,
-  "code": "UNAUTHORIZED",
-  "message": "未提供授權憑證"
-}
-```
-
-## RBAC 權限重設（2026-06）
-
-本專案已將權限命名統一為 `資源:動作`，並使用複數資源名稱：
+目前權限字串採用 `資源:動作` 規範：
 
 - `resume:update`
 - `users:read`
@@ -324,38 +142,48 @@ curl -X POST http://localhost:8787/api/users \
 - `roles:delete`
 - `permissions:read`
 
-預設角色與責任範圍：
+預設角色：
 
-- `SUPER_ADMIN`：擁有全部權限
-- `USER_ADMIN`：管理 users / roles / permissions（不含履歷內容維護）
-- `CONTENT_EDITOR`：僅可更新履歷內容
+- `SUPER_ADMIN`: 擁有全部權限
+- `USER_ADMIN`: 管理 users / roles / permissions
+- `CONTENT_EDITOR`: 只能更新履歷內容
 
-若你要在既有資料庫重新套用新的權限模型，建議流程：
+詳細權限與路由要求請見 [docs/API_SPEC.md](./docs/API_SPEC.md)。
 
-```bash
-# 1) 重新建立本機 DB（開發環境最乾淨）
-npx wrangler d1 execute portfolio-db --local --command="DROP TABLE IF EXISTS role_permissions; DROP TABLE IF EXISTS user_roles; DROP TABLE IF EXISTS permissions; DROP TABLE IF EXISTS roles; DROP TABLE IF EXISTS users; DROP TABLE IF EXISTS resumes;"
+## API 概覽
 
-# 2) 重新套 schema 與 seed
-npx wrangler d1 execute portfolio-db --local --file=./schema.sql
-npx wrangler d1 execute portfolio-db --local --file=./seed.sql
-```
+| 方法 | 路徑 | 驗證 | 權限 | 說明 |
+| --- | --- | --- | --- | --- |
+| GET | `/` | 無 | 無 | 健康檢查 |
+| POST | `/api/auth/login` | 無 | 無 | 登入並取得 JWT |
+| GET | `/api/auth/me` | Bearer Token | 任何已登入使用者 | 取得目前登入者資料 |
+| GET | `/api/resume/:lang` | 無 | 無 | 依語系取得履歷 |
+| PUT | `/api/resume` | Bearer Token | `resume:update` | 更新履歷 |
+| GET | `/api/users` | Bearer Token | `users:read` 或 `users:write` | 取得全部使用者 |
+| GET | `/api/users/:id` | Bearer Token | `users:read` 或 `users:write` | 取得單一使用者 |
+| POST | `/api/users` | Bearer Token | `users:write` | 建立使用者 |
+| PUT | `/api/users/:id` | Bearer Token | `users:write` | 更新使用者 |
+| DELETE | `/api/users/:id` | Bearer Token | `users:delete` | 刪除使用者 |
+| GET | `/api/roles` | Bearer Token | `roles:read` 或 `roles:write` | 取得全部角色 |
+| GET | `/api/roles/:id` | Bearer Token | `roles:read` 或 `roles:write` | 取得單一角色 |
+| POST | `/api/roles` | Bearer Token | `roles:write` | 建立角色 |
+| PUT | `/api/roles/:id` | Bearer Token | `roles:write` | 更新角色 |
+| DELETE | `/api/roles/:id` | Bearer Token | `roles:delete` | 刪除角色 |
+| GET | `/api/permissions` | Bearer Token | `permissions:read` | 取得權限清單 |
 
-若是正式環境，請先備份資料，再用 migration 腳本逐步更新，不建議直接 drop table。
+## 統一 API 回應格式
 
-## API 回應格式
-
-### 成功回應
+成功回應：
 
 ```json
 {
   "success": true,
-  "message": "可選",
+  "message": "操作成功",
   "data": {}
 }
 ```
 
-### 錯誤回應
+錯誤回應：
 
 ```json
 {
@@ -374,12 +202,11 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 - `CONFLICT`
 - `INTERNAL_ERROR`
 
-## 驗證與授權流程
+## API 文件
 
-1. 前端呼叫 `POST /api/auth/login` 取得 JWT token
-2. 受保護 API 以 `Authorization: Bearer <token>` 夾帶 token
-3. `authGuard` 驗證 token 並載入使用者權限
-4. `permissionGuard` 檢查路由所需權限
+完整的 API 規格表、請求範例、錯誤碼與資料結構請見：
+
+- [docs/API_SPEC.md](./docs/API_SPEC.md)
 
 ## 部署
 
@@ -387,25 +214,28 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 npm run deploy
 ```
 
-建議部署前檢查：
+部署前請確認：
 
-1. D1 schema 已套用
+1. D1 schema 已建立
 2. `JWT_SECRET` 已設定
-3. CORS 白名單已更新為正式網域
+3. CORS 白名單已更新為正式前端域名
 
-## 授權條款
+## 授權與補充
 
-目前專案尚未附上 LICENSE。若要公開發佈，建議新增 `LICENSE` 檔案。
+目前專案尚未附帶 LICENSE。若要公開發佈，建議補上 LICENSE 檔案。
 
-## 目前狀態與後續建議
+## 目前狀態
 
-目前專案已具備完整的後端基礎架構，包含：
-- JWT 驗證與 RBAC 授權
-- 使用者 / 角色 / 權限 / 履歷管理
-- 統一 API 回應格式
-- 結構化錯誤日誌與安全 JSON 解析
+目前後端已具備：
 
-建議後續可持續強化的項目：
-- 登入速率限制
-- 更細緻的請求追蹤與日誌上下文
-- authGuard 權限查詢的快取與效能優化
+- JWT 驗證與 RBAC 權限檢查
+- 使用者 / 角色 / 權限 / 履歷 CRUD
+- 統一 API 回應與錯誤封裝
+- Cloudflare D1 與 Hono 整合
+
+如果你要繼續擴充，下一步很適合加入：
+
+- rate limiting
+- API versioning
+- request logging
+- cache / optimization for auth permission queries
