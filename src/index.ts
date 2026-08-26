@@ -10,6 +10,7 @@ import resumeApp from './modules/resume/resume.route'
 import usersApp from './modules/users/users.route'
 import rolesApp from './modules/roles/roles.route'
 import permissionsApp from './modules/permissions/permissions.route'
+import articlesApp from './modules/articles/articles.route'
 import type { AppEnv } from './types'
 
 // 建立 Hono 應用實例，所有 API 入口都由此統一掛載。
@@ -45,5 +46,6 @@ app.route('/api/resume', resumeApp)
 app.route('/api/users', usersApp)
 app.route('/api/roles', rolesApp)
 app.route('/api/permissions', permissionsApp)
+app.route('/api/articles', articlesApp)
 
 export default app

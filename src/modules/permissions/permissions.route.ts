@@ -3,9 +3,10 @@ import { authGuard } from '../../middleware/authGuard'
 import { permissionGuard } from '../../middleware/permissionGuard'
 import { PERMISSIONS } from '../../constants/permissions'
 import { getPermissionsController } from './permissions.controller'
+import type { AppEnv } from '../../types'
 
 // Permissions 模組路由：提供權限清單查詢入口。
-const permissions = new Hono()
+const permissions = new Hono<AppEnv>({ strict: false })
 
 // 全域套用 authGuard，僅允許已登入且具權限的使用者查詢。
 permissions.use('*', authGuard)

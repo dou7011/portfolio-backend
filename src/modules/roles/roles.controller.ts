@@ -5,8 +5,7 @@ import {
   getRoleByIdService,
   createRoleService, 
   updateRoleService, 
-  deleteRoleService,
-  assignRolePermissionsService 
+  deleteRoleService
 } from './roles.service'
 import type { DbBindings } from '../../types'
 import { logger } from '../../utils/logger'

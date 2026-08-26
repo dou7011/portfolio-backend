@@ -11,9 +11,11 @@ Portfolio Backend 是一個以 Cloudflare Workers + Hono 建立的輕量後端�
 ## 主要功能
 
 - 使用者登入與 JWT 驗證
-- RBAC 權限模型：users / roles / permissions / resume
+- RBAC 權限模型：users / roles / permissions / resume / articles
 - 使用者、角色與權限管理 CRUD
 - 多語系履歷內容讀取與更新
+- 部落格文章與作品集內容管理
+- 已發布文章依類型篩選與 slug 查詢
 - 統一錯誤處理與 API 回應格式
 - Cloudflare D1 本地開發與部署整合
 
@@ -42,6 +44,7 @@ portfolio-backend/
 │   │   └── permissionGuard.ts
 │   ├── modules/
 │   │   ├── auth/
+│   │   ├── articles/
 │   │   ├── permissions/
 │   │   ├── resume/
 │   │   ├── roles/
@@ -90,7 +93,7 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 
 ```bash
 npx wrangler secret put JWT_SECRET
-```
+| DELETE | `/api/articles/:slug` | Bearer Token | `articles:delete` | 刪除文章或作品；目前控制器以數字文章 `id` 查詢 |
 
 本機也可使用 `.dev.vars`，但請不要把真實機密提交到 Git。
 
@@ -140,6 +143,8 @@ CORS 會在 `src/index.ts` 全域啟用，並依白名單判斷可接受來源�
 - `roles:read`
 - `roles:write`
 - `roles:delete`
+- `articles:write`
+- `articles:delete`
 - `permissions:read`
 
 預設角色：
@@ -147,6 +152,8 @@ CORS 會在 `src/index.ts` 全域啟用，並依白名單判斷可接受來源�
 - `SUPER_ADMIN`: 擁有全部權限
 - `USER_ADMIN`: 管理 users / roles / permissions
 - `CONTENT_EDITOR`: 只能更新履歷內容
+
+`articles:write` 與 `articles:delete` 已加入後端權限常數與文章路由。現行 `seed.sql` 尚未預設建立或綁定這兩個權限，部署前需依需求補入資料庫並綁定至角色。
 
 詳細權限與路由要求請見 [docs/API_SPEC.md](./docs/API_SPEC.md)。
 
@@ -170,6 +177,33 @@ CORS 會在 `src/index.ts` 全域啟用，並依白名單判斷可接受來源�
 | PUT | `/api/roles/:id` | Bearer Token | `roles:write` | 更新角色 |
 | DELETE | `/api/roles/:id` | Bearer Token | `roles:delete` | 刪除角色 |
 | GET | `/api/permissions` | Bearer Token | `permissions:read` | 取得權限清單 |
+| GET | `/api/articles` | 無 | 無 | 取得已發布文章或作品列表，可用 `?type=blog` / `?type=portfolio` 篩選 |
+| GET | `/api/articles/:slug` | 無 | 無 | 依 slug 取得已發布文章或作品詳細內容 |
+| POST | `/api/articles` | Bearer Token | `articles:write` | 建立文章或作品 |
+| PUT | `/api/articles/:slug` | Bearer Token | `articles:write` | 更新文章或作品；目前控制器以數字文章 `id` 查詢 |
+| DELETE | `/api/articles/:slug` | Bearer Token | `articles:delete` | 刪除文章或作品；目前控制器以數字文章 `id` 查詢 |
+
+文章內容的 `content` 使用 Markdown 格式，`tags` 為字串陣列。`type` 通常使用 `blog`（技術文章）或 `portfolio`（作品）。
+
+## 文章資料結構
+
+```json
+{
+  "id": 1,
+  "slug": "it-auth-service",
+  "title": "IT AuthService 集中式身分驗證與權限中心",
+  "type": "portfolio",
+  "cover_image": null,
+  "excerpt": "文章摘要",
+  "content": "## 專案概述",
+  "tags": ["TypeScript", "RBAC"],
+  "github_url": "https://github.com/example/project",
+  "demo_url": null,
+  "view_count": 0,
+  "is_published": true,
+  "published_at": "2026-06-02 09:00:00"
+}
+```
 
 ## 統一 API 回應格式
 
@@ -229,7 +263,8 @@ npm run deploy
 目前後端已具備：
 
 - JWT 驗證與 RBAC 權限檢查
-- 使用者 / 角色 / 權限 / 履歷 CRUD
+- 使用者 / 角色 / 權限 / 履歷 / 文章 CRUD
+- 公開文章列表、類型篩選與 slug 詳情查詢
 - 統一 API 回應與錯誤封裝
 - Cloudflare D1 與 Hono 整合
 

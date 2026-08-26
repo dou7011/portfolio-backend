@@ -21,7 +21,8 @@ export const getResumeController = async (c: Context<AppEnv>) => {
       return fail(c, 404, 'NOT_FOUND', `找不到語言為 ${lang} 的履歷資料`)
     }
     return ok(c, { data: resume })
-  } catch {
+  } catch (error: any) {
+    logger.error('getResumeController', `Error fetching resume for lang: ${lang}`, error)
     return fail(c, 500, 'INTERNAL_ERROR', '伺服器內部發生錯誤，請稍後再試')
   }
 }
@@ -40,7 +41,8 @@ export const updateResumeController = async (c: Context<AppEnv>) => {
   try {
     await updateResume(c.env.DB, { lang, title, summary, skills, experience, education, certifications })
     return ok(c, { message: '履歷更新成功' })
-  } catch {
+  } catch (error: any) {
+    logger.error('updateResumeController', `Error updating resume for lang: ${lang}`, error)
     return fail(c, 500, 'INTERNAL_ERROR', '伺服器內部發生錯誤，請稍後再試')
   }
 }

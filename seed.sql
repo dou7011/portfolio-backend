@@ -4,13 +4,13 @@
 -- ==========================================
 
 -- 1. 寫入角色資料 (Roles)
-INSERT INTO roles (id, name, description) VALUES
+INSERT OR IGNORE INTO roles (id, name, description) VALUES
 (1, 'SUPER_ADMIN', '超級管理員，擁有全部後台權限'),
 (2, 'USER_ADMIN', '帳號與 RBAC 管理者（不含履歷內容維護）'),
 (3, 'CONTENT_EDITOR', '內容編輯者（可維護履歷內容）');
 
 -- 2. 寫入權限明細資料 (Permissions)
-INSERT INTO permissions (id, action, description) VALUES
+INSERT OR IGNORE INTO permissions (id, action, description) VALUES
 (1, 'resume:update', '更新履歷資料'),
 (2, 'users:read', '讀取使用者資料'),
 (3, 'users:write', '建立與更新使用者'),
@@ -22,19 +22,19 @@ INSERT INTO permissions (id, action, description) VALUES
 
 -- 3. 綁定角色擁有的權限 (Role-Permissions)
 -- SUPER_ADMIN (角色 1) 擁有所有權限
-INSERT INTO role_permissions (role_id, permission_id) VALUES
+INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES
 (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8);
 
 -- USER_ADMIN (角色 2)：專注使用者/角色/權限管理
-INSERT INTO role_permissions (role_id, permission_id) VALUES
+INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES
 (2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7), (2, 8);
 
 -- CONTENT_EDITOR (角色 3)：僅維護履歷
-INSERT INTO role_permissions (role_id, permission_id) VALUES
+INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES
 (3, 1);
 
 -- 4. 寫入個人履歷資料 (Resumes)
-INSERT INTO resumes (lang, title, summary, skills, experience, education, certifications)
+INSERT OR IGNORE INTO resumes (lang, title, summary, skills, experience, education, certifications)
 VALUES (
   'zh',
   '林和泰的個人履歷',
@@ -45,7 +45,7 @@ VALUES (
   '[{"name": "Microsoft Azure DP-100", "credentialId": "1093-1934", "description": "於 Azure 應用資料科學與機器學習技術。"}, {"name": "Microsoft Azure AZ-900", "credentialId": "H558-0163", "description": "熟悉雲端運算核心概念。"}]'
 );
 
-INSERT INTO resumes (lang, title, summary, skills, experience, education, certifications)
+INSERT OR IGNORE INTO resumes (lang, title, summary, skills, experience, education, certifications)
 VALUES (
   'en',
   'Ho-Tai Lin | Resume',
@@ -56,9 +56,64 @@ VALUES (
   '[{"name": "Microsoft Azure DP-100", "credentialId": "1093-1934", "description": "Designing and Implementing a Data Science Solution on Azure"}, {"name": "Microsoft Azure AZ-900", "credentialId": "H558-0163", "description": "Microsoft Azure Fundamentals"}]'
 );
 
+-- 5. 寫入文章資料 (Articles)
+-- 範例 1：實習作品展示
+INSERT OR IGNORE INTO articles (slug, title, type, excerpt, content, tags, github_url, is_published, published_at)
+VALUES 
+(
+    'it-auth-service', 
+    'IT AuthService 集中式身分驗證與權限中心', 
+    'portfolio', 
+    '基於 Vue.js 與 TypeScript 打造的企業級前端認證模組，實作即時權限校驗。',
+    '## 專案概述
+這個系統整合了前端路由防護與後端權限驗證。
+
+### 核心技術
+* Vue.js
+* TypeScript
+
+### 解決方案
+實作了登出與清空 localStorage 的集中管理，並確保每一次的動作都會打 API 確認最新的權限狀態，實現嚴謹的存取控制。', 
+    '["Vue.js", "TypeScript", "RBAC", "Security"]', 
+    'https://github.com/your-account/it-auth-service', 
+    1, 
+    CURRENT_TIMESTAMP
+),
+(
+    'azure-data-scientist-associate', 
+    'Microsoft Certified: Azure Data Scientist Associate 考照心得與實務分享', 
+    'blog', 
+    '分享我在準備 Azure 機器學習服務認證的過程，以及如何將資料科學應用於實際專案。',
+    '## 認證動機
+為了深化在資料科學領域的專業，並取得具公信力的技術認證。
+
+### 準備重點
+* 機器學習模型訓練與評估
+* Azure Machine Learning 服務操作與部署', 
+    '["Data Science", "Azure", "Certification"]', 
+    NULL, 
+    1, 
+    CURRENT_TIMESTAMP
+),
+(
+    'ncut-csie-project', 
+    '勤益科大資工系 - 專題開發紀錄', 
+    'blog', 
+    '紀錄我在進修期間的系統開發與架構設計心路歷程。',
+    '## 背景
+在學校的專題中，我負責整體架構的規劃與前端實作。
+
+### 學習成果
+透過這個專案，我將課堂理論與實務開發進行了完美結合，特別是在前後端分離架構的掌握度上有大幅提升。', 
+    '["NCUT", "Project", "Frontend"]', 
+    NULL, 
+    0, 
+    NULL
+);
+
 -- 5. 寫入第一位後台使用者（請先用 npm run gen:seed-user 產生 hash）
 -- 範例：
--- INSERT INTO users (email, password_hash, is_active)
+-- INSERT OR IGNORE INTO users (email, password_hash, is_active)
 -- VALUES ('admin@example.com', '請貼上產生的 saltHex:hashHex', 1);
--- INSERT INTO user_roles (user_id, role_id)
+-- INSERT OR IGNORE INTO user_roles (user_id, role_id)
 -- SELECT id, 1 FROM users WHERE email = 'admin@example.com';

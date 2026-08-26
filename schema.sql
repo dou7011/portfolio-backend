@@ -65,3 +65,32 @@ CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permission
 
 -- users 與 resumes 的高頻查詢欄位索引
 CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
+
+
+-- ==========================================
+-- 部落格與作品集 (Articles & Portfolio)
+-- ==========================================
+
+-- 文章表
+CREATE TABLE IF NOT EXISTS articles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug VARCHAR(100) NOT NULL UNIQUE,        -- 網址友善的英文識別碼，例如 'it-auth-service'
+    title VARCHAR(200) NOT NULL,              -- 文章/專案標題
+    type VARCHAR(50) NOT NULL DEFAULT 'blog', -- 類型分類：'blog' (技術文章) 或 'portfolio' (作品)
+    cover_image VARCHAR(255),                 -- 封面圖 URL
+    excerpt TEXT,                             -- 簡短摘要 (列表頁顯示用)
+    content TEXT NOT NULL,                    -- Markdown 格式的正文
+    tags TEXT,                                -- 技術標籤 (存 JSON 字串，例如 '["TypeScript", "Vue.js"]')
+    github_url VARCHAR(255),                  -- GitHub 原始碼連結 (選填)
+    demo_url VARCHAR(255),                    -- 實際運作的網站連結 (選填)
+    view_count INTEGER DEFAULT 0,             -- 瀏覽次數 (可用於熱門文章排序)
+    is_published BOOLEAN DEFAULT 0,           -- 狀態：0 (草稿), 1 (已發布)
+    published_at DATETIME,                    -- 發布時間
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 建立索引加速查詢
+CREATE INDEX idx_articles_slug ON articles(slug);
+CREATE INDEX idx_articles_type ON articles(type);
+CREATE INDEX idx_articles_published ON articles(is_published);

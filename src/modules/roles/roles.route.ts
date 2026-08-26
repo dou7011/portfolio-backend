@@ -9,9 +9,10 @@ import {
   updateRoleController, 
   deleteRoleController
 } from './roles.controller'
+import type { AppEnv } from '../../types'
 
 // Roles 模組路由：提供角色與權限綁定的管理入口。
-const roles = new Hono()
+const roles = new Hono<AppEnv>({ strict: false })
 
 // 全域套用 authGuard，確保角色管理的所有端點都需要登入。
 roles.use('*', authGuard)

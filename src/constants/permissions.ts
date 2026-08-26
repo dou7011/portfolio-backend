@@ -10,5 +10,8 @@ export const PERMISSIONS = {
   ROLES_WRITE: 'roles:write',
   ROLES_DELETE: 'roles:delete',
 
+  ARTICLE_WRITE: 'articles:write',
+  ARTICLE_DELETE: 'articles:delete',
+
   PERMISSIONS_READ: 'permissions:read'
 } as const
