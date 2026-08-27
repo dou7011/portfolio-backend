@@ -18,12 +18,15 @@ INSERT OR IGNORE INTO permissions (id, action, description) VALUES
 (5, 'roles:read', '讀取角色資料'),
 (6, 'roles:write', '建立與更新角色及權限綁定'),
 (7, 'roles:delete', '刪除角色'),
-(8, 'permissions:read', '讀取權限清單');
+(8, 'permissions:read', '讀取權限清單'),
+(9, 'articles:write', '建立與更新文章'),
+(10, 'articles:delete', '刪除文章');
+
 
 -- 3. 綁定角色擁有的權限 (Role-Permissions)
 -- SUPER_ADMIN (角色 1) 擁有所有權限
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES
-(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8);
+(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9), (1, 10);
 
 -- USER_ADMIN (角色 2)：專注使用者/角色/權限管理
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES
