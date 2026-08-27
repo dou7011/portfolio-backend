@@ -17,14 +17,18 @@ type ArticlePayload
 export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
   try {
     const type = c.req.query('type');
+    // 1. 取得 limit 參數
+    const limitQuery = c.req.query('limit');
+    // 2. 如果有傳入 limit，嘗試將其轉換為 10 進位數字；否則維持 undefined
+    const limit = limitQuery ? parseInt(limitQuery, 10) : undefined;
+
     const db = c.env.DB;
-    const articles = await getPublishedArticlesService(db, type);
+    // 3. 將 limit 當作第三個參數傳給 Service
+    const articles = await getPublishedArticlesService(db, type, limit);
     
     return ok(c, { data: articles });
   } catch (error: any) {
-    // 統一使用 logger 紀錄錯誤
     logger.error('getPublishedArticlesController', error);
-    // 使用 fail() 封裝錯誤回應與 HTTP 狀態碼
     return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
   }
 };

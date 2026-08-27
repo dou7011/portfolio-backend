@@ -89,13 +89,19 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 
 ### 4. 設定 JWT Secret
 
-建議使用 Wrangler Secret：
+本機開發可在 `.dev.vars` 放入：
+
+```bash
+JWT_SECRET=請填入本機開發用的隨機字串
+```
+
+部署到 Cloudflare Workers 時，請使用 Wrangler Secret：
 
 ```bash
 npx wrangler secret put JWT_SECRET
-| DELETE | `/api/articles/:slug` | Bearer Token | `articles:delete` | 刪除文章或作品；目前控制器以數字文章 `id` 查詢 |
+```
 
-本機也可使用 `.dev.vars`，但請不要把真實機密提交到 Git。
+請勿將 `.dev.vars` 或任何真實機密提交到 Git。
 
 ### 5. 啟動開發伺服器
 
@@ -153,7 +159,6 @@ CORS 會在 `src/index.ts` 全域啟用，並依白名單判斷可接受來源�
 - `USER_ADMIN`: 管理 users / roles / permissions
 - `CONTENT_EDITOR`: 只能更新履歷內容
 
-`articles:write` 與 `articles:delete` 已加入後端權限常數與文章路由。現行 `seed.sql` 尚未預設建立或綁定這兩個權限，部署前需依需求補入資料庫並綁定至角色。
 
 詳細權限與路由要求請見 [docs/API_SPEC.md](./docs/API_SPEC.md)。
 
@@ -177,13 +182,35 @@ CORS 會在 `src/index.ts` 全域啟用，並依白名單判斷可接受來源�
 | PUT | `/api/roles/:id` | Bearer Token | `roles:write` | 更新角色 |
 | DELETE | `/api/roles/:id` | Bearer Token | `roles:delete` | 刪除角色 |
 | GET | `/api/permissions` | Bearer Token | `permissions:read` | 取得權限清單 |
-| GET | `/api/articles` | 無 | 無 | 取得已發布文章或作品列表，可用 `?type=blog` / `?type=portfolio` 篩選 |
+| GET | `/api/articles` | 無 | 無 | 取得已發布文章或作品列表，可用 `?type=blog` / `?type=portfolio` 篩選以及 `limit` 限制回傳筆數（需大於 `0`） |
 | GET | `/api/articles/:slug` | 無 | 無 | 依 slug 取得已發布文章或作品詳細內容 |
 | POST | `/api/articles` | Bearer Token | `articles:write` | 建立文章或作品 |
 | PUT | `/api/articles/:slug` | Bearer Token | `articles:write` | 更新文章或作品；目前控制器以數字文章 `id` 查詢 |
 | DELETE | `/api/articles/:slug` | Bearer Token | `articles:delete` | 刪除文章或作品；目前控制器以數字文章 `id` 查詢 |
 
 文章內容的 `content` 使用 Markdown 格式，`tags` 為字串陣列。`type` 通常使用 `blog`（技術文章）或 `portfolio`（作品）。
+
+### `/api/articles` 查詢參數
+
+`GET /api/articles` 只回傳已發布的文章，支援以下查詢參數：
+
+| 參數 | 型別 | 必填 | 說明 |
+| --- | --- | --- | --- |
+| `type` | string | 否 | 依文章類型篩選，例如 `blog` 或 `portfolio` |
+| `limit` | integer | 否 | 限制回傳筆數；只有大於 `0` 的數值會套用，未傳入或無效值代表不限制筆數 |
+
+範例：
+
+```http
+GET /api/articles?type=portfolio&limit=5
+```
+
+參數可以單獨使用：
+
+```http
+GET /api/articles?type=blog
+GET /api/articles?limit=10
+```
 
 ## 文章資料結構
 
@@ -242,7 +269,37 @@ CORS 會在 `src/index.ts` 全域啟用，並依白名單判斷可接受來源�
 
 - [docs/API_SPEC.md](./docs/API_SPEC.md)
 
+## 建立初始管理員
+
+`seed.sql` 只會建立角色、權限、履歷與範例文章，不會寫入真實使用者。請先產生帳號 SQL：
+
+```bash
+npm run gen:seed-user -- --email=admin@example.com
+```
+
+指令會互動式要求輸入密碼，並輸出兩段 SQL。將輸出內容附加到 `seed.sql` 後，重新初始化本地資料庫：
+
+```bash
+npx wrangler d1 execute portfolio-db --local --file=./schema.sql
+npx wrangler d1 execute portfolio-db --local --file=./seed.sql
+```
+
+也可以直接以參數執行（請注意命令列歷史可能留下密碼）：
+
+```bash
+npm run gen:seed-user -- --email=admin@example.com --password=請填入密碼 --confirm=請填入密碼
+```
+
 ## 部署
+
+首次部署前，請先建立遠端 D1 schema：
+
+```bash
+npx wrangler d1 execute portfolio-db --remote --file=./schema.sql
+npx wrangler d1 execute portfolio-db --remote --file=./seed.sql
+```
+
+再部署 Worker：
 
 ```bash
 npm run deploy
@@ -250,9 +307,9 @@ npm run deploy
 
 部署前請確認：
 
-1. D1 schema 已建立
+1. 遠端 D1 schema 與必要種子資料已建立
 2. `JWT_SECRET` 已設定
-3. CORS 白名單已更新為正式前端域名
+3. `ALLOWED_ORIGINS` 已更新為正式前端域名
 
 ## 授權與補充
 

@@ -15,20 +15,28 @@ export interface ArticlePayload {
 /**
  * 取得已發布的文章/作品列表，若提供 type 參數則過濾該類型。
  */
-export const getPublishedArticlesService = async (db: D1Database, type?: string) => {
+export const getPublishedArticlesService = async (db: D1Database, type?: string, limit?: number) => {
   let query = `
     SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, published_at 
     FROM articles 
     WHERE is_published = 1
   `;
-  const params: string[] = [];
+  
+  const params: (string | number)[] = [];
 
   if (type) {
     query += ` AND type = ?`;
     params.push(type);
   }
 
+  // 排序必須寫在 LIMIT 的前面
   query += ` ORDER BY published_at DESC`;
+
+  // 如果 limit 存在，且大於 0 (防禦性過濾掉亂傳的負數或非數字)
+  if (limit && limit > 0) {
+    query += ` LIMIT ?`;
+    params.push(limit);
+  }
 
   const { results } = await db.prepare(query).bind(...params).all();
 
