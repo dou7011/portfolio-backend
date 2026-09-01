@@ -23,13 +23,13 @@ export const ok = (
   options?: {
     data?: unknown
     message?: string
+    [key: string]: unknown
   }
 ) => {
   return c.json(
     {
       success: true,
-      ...(options?.message ? { message: options.message } : {}),
-      ...(options?.data !== undefined ? { data: options.data } : {})
+      ...(options ?? {})
     },
     200
   )
@@ -40,13 +40,13 @@ export const created = (
   options?: {
     data?: unknown
     message?: string
+    [key: string]: unknown
   }
 ) => {
   return c.json(
     {
       success: true,
-      ...(options?.message ? { message: options.message } : {}),
-      ...(options?.data !== undefined ? { data: options.data } : {})
+      ...(options ?? {})
     },
     201
   )
