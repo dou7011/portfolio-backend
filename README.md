@@ -83,7 +83,7 @@ portfolio-backend/
 - 取得當前登入者資訊
 - 履歷讀取與更新
 - 使用者 / 角色 / 權限 CRUD
-- 文章與作品內容 CRUD
+- 文章與作品內容 CRUD，支持分頁與類型過濾
 - 公開文章列表與 slug 查詢
 - RBAC 權限 guard
 - 統一 API 回應格式與 CORS 設定
@@ -160,11 +160,11 @@ http://localhost:8787
 | `PUT` | `/api/roles/:id` | 更新角色 |
 | `DELETE` | `/api/roles/:id` | 刪除角色 |
 | `GET` | `/api/permissions` | 取得權限列表 |
-| `GET` | `/api/articles` | 取得已發布文章 / 作品列表 |
+| `GET` | `/api/articles` | 取得已發布文章 / 作品列表（支持分頁） |
 | `GET` | `/api/articles/:slug` | 依 slug 取得文章內容 |
 | `POST` | `/api/articles` | 建立文章 / 作品 |
-| `PUT` | `/api/articles/:slug` | 更新文章 / 作品 |
-| `DELETE` | `/api/articles/:slug` | 刪除文章 / 作品 |
+| `PUT` | `/api/articles/:id` | 更新文章 / 作品 |
+| `DELETE` | `/api/articles/:id` | 刪除文章 / 作品 |
 
 ## 權限模型
 
@@ -185,7 +185,31 @@ http://localhost:8787
 
 ## API 文件
 
-更完整的路由、回應格式與錯誤碼請見：
+### 分頁功能
+
+`GET /api/articles` 支持分頁查詢，相關參數：
+
+- `page`: 頁碼（預設 1）
+- `pageSize`: 每頁筆數（預設 10，最多 100）
+- `type`: 文章類型過濾（可選）
+- `is_published`: 發布狀態過濾（可選，預設 1 為已發布）
+
+**範例**：
+
+```bash
+# 取得第 1 頁，每頁 10 篇已發布的文章
+GET /api/articles?page=1&pageSize=10
+
+# 根據類型過濾
+GET /api/articles?type=article&page=1&pageSize=20
+
+# 包含草稿
+GET /api/articles?is_published=0&page=1
+```
+
+### 完整 API 規格
+
+更完整的路由、回應格式、分頁資訊與錯誤碼請見：
 
 - [docs/API_SPEC.md](./docs/API_SPEC.md)
 

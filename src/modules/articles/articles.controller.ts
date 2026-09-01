@@ -12,21 +12,31 @@ type ArticlePayload
 } from './articles.service';
 
 /**
- * 取得已發布的文章/作品列表
+ * 取得已發布的文章/作品列表，支持分頁
  */
 export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
   try {
     const type = c.req.query('type');
-    // 1. 取得 limit 參數
-    const limitQuery = c.req.query('limit');
-    // 2. 如果有傳入 limit，嘗試將其轉換為 10 進位數字；否則維持 undefined
-    const limit = limitQuery ? parseInt(limitQuery, 10) : undefined;
+    
+    // 解析 is_published 參數（是否發布，預設 1 已發布）
+    const publishedQuery = c.req.query('is_published');
+    const published = publishedQuery ? parseInt(publishedQuery, 10) : 1;
+
+    // 解析 pageSize 參數（每頁文章數，預設 10，最多 100）
+    const pageSizeQuery = c.req.query('pageSize');
+    const pageSize = pageSizeQuery ? Math.min(Math.max(parseInt(pageSizeQuery, 10), 1), 100) : 10;
+    
+    // 解析 page 參數（第幾頁，預設 1）
+    const pageQuery = c.req.query('page');
+    const page = pageQuery ? Math.max(parseInt(pageQuery, 10), 1) : 1;
+    
+    // 計算 offset
+    const offset = (page - 1) * pageSize;
 
     const db = c.env.DB;
-    // 3. 將 limit 當作第三個參數傳給 Service
-    const articles = await getPublishedArticlesService(db, type, limit);
+    const result = await getPublishedArticlesService(db, type, published, pageSize, offset);
     
-    return ok(c, { data: articles });
+    return ok(c, result);
   } catch (error: any) {
     logger.error('getPublishedArticlesController', error);
     return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
@@ -90,7 +100,7 @@ export const createArticleController = async (c: Context<AppEnv>) => {
 export const updateArticleController = async (c: Context<AppEnv>) => {
   try {
     const id = c.req.param('id');
-    if (!id) return fail(c, 400, 'BAD_REQUEST', '缺少文章 ID');
+    if (!id) return fail(c, 400, 'BAD_REQUEST', '缺少要更新的文章 ID');
 
     const body = await c.req.json<ArticlePayload>();
     const db = c.env.DB;

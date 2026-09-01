@@ -63,6 +63,8 @@ Authorization: Bearer <token>
 - `roles:read`
 - `roles:write`
 - `roles:delete`
+  - `articles:write`
+- `articles:delete`
 - `permissions:read`
 
 ### 3.3 權限檢查規則
@@ -88,6 +90,8 @@ Authorization: Bearer <token>
 - `roles:read`: 讀取角色
 - `roles:write`: 建立 / 更新角色
 - `roles:delete`: 刪除角色
+- `articles:write`: 建立 / 更新文章
+- `articles:delete`: 刪除文章
 - `permissions:read`: 讀取權限列表
 
 ## 5. 端點總表
@@ -110,6 +114,11 @@ Authorization: Bearer <token>
 | PUT | `/api/roles/:id` | Yes | `roles:write` | 更新角色 |
 | DELETE | `/api/roles/:id` | Yes | `roles:delete` | 刪除角色 |
 | GET | `/api/permissions` | Yes | `permissions:read` | 取得權限列表 |
+| GET | `/api/articles` | No | No | 取得已發布文章列表（支持分頁） |
+| GET | `/api/articles/:slug` | No | No | 根據 slug 取得單篇文章 |
+| POST | `/api/articles` | Yes | `articles:write` | 新增文章 |
+| PUT | `/api/articles/:id` | Yes | `articles:write` | 更新文章 |
+| DELETE | `/api/articles/:id` | Yes | `articles:delete` | 刪除文章 |
 
 ## 6. 資料型別
 
@@ -208,6 +217,48 @@ Authorization: Bearer <token>
   "updated_at": "2026-06-02 09:00:00"
 }
 ```
+
+### 6.6 Article
+
+```json
+{
+  "id": "1",
+  "slug": "my-article",
+  "title": "My Article",
+  "type": "article",
+  "cover_image": "https://example.com/image.jpg",
+  "excerpt": "Article summary...",
+  "content": "Full article content...",
+  "tags": ["tag1", "tag2"],
+  "github_url": "https://github.com/...",
+  "demo_url": "https://demo.com/...",
+  "view_count": 100,
+  "is_published": true,
+  "published_at": "2026-01-01T00:00:00Z",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z"
+}
+```
+
+### 6.7 Pagination
+
+```json
+{
+  "total": 50,
+  "limit": 10,
+  "offset": 0,
+  "page": 1,
+  "totalPages": 5
+}
+```
+
+欄位說明：
+
+- `total`: 符合條件的總記錄數
+- `limit`: 本次請求的每頁記錄數
+- `offset`: 資料庫 OFFSET 值
+- `page`: 當前頁碼
+- `totalPages`: 總頁數
 
 ## 7. A. 健康檢查
 
@@ -720,9 +771,237 @@ Request body:
 - `403 FORBIDDEN`
 - `500 INTERNAL_ERROR`
 
-## 12. F. Permissions
+## 12. G. Articles
 
-### 12.1 GET /api/permissions
+### 12.1 GET /api/articles
+
+取得已發布的文章列表，支持分頁和類型過濾。
+
+- 認證: 無
+- 權限: 無
+
+Query Parameters:
+
+- `page`: 可選，頁碼，預設 1
+- `pageSize`: 可選，每頁文章數，預設 10，最多 100
+- `type`: 可選，文章類型過濾
+- `is_published`: 可選，是否發布（1=已發布，0=草稿），預設 1
+
+成功回應 `200 OK`：
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "1",
+      "slug": "my-article",
+      "title": "My Article",
+      "type": "article",
+      "cover_image": "https://example.com/image.jpg",
+      "excerpt": "Article summary...",
+      "tags": ["tag1", "tag2"],
+      "view_count": 100,
+      "published_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 50,
+    "limit": 10,
+    "offset": 0,
+    "page": 1,
+    "totalPages": 5
+  }
+}
+```
+
+可能錯誤：
+
+- `500 INTERNAL_ERROR`: 伺服器錯誤
+
+### 12.2 GET /api/articles/:slug
+
+根據 slug 取得單篇文章詳細內容。
+
+- 認證: 無
+- 權限: 無
+
+Path Params:
+
+- `slug`: 必填，文章的 slug
+
+成功回應 `200 OK`：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "1",
+    "slug": "my-article",
+    "title": "My Article",
+    "type": "article",
+    "cover_image": "https://example.com/image.jpg",
+    "excerpt": "Article summary...",
+    "content": "Full article content...",
+    "tags": ["tag1", "tag2"],
+    "github_url": "https://github.com/...",
+    "demo_url": "https://demo.com/...",
+    "view_count": 100,
+    "is_published": true,
+    "published_at": "2026-01-01T00:00:00Z",
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:00:00Z"
+  }
+}
+```
+
+可能錯誤：
+
+- `404 NOT_FOUND`: 找不到該文章
+- `500 INTERNAL_ERROR`: 伺服器錯誤
+
+### 12.3 POST /api/articles
+
+新增文章（需要認證和權限）。
+
+- 認證: 必須帶 Bearer Token
+- 權限: `articles:write`
+
+Request body：
+
+```json
+{
+  "slug": "my-new-article",
+  "title": "My New Article",
+  "type": "article",
+  "content": "Article content...",
+  "cover_image": "https://example.com/image.jpg",
+  "excerpt": "Short summary...",
+  "tags": ["tag1", "tag2"],
+  "github_url": "https://github.com/...",
+  "demo_url": "https://demo.com/...",
+  "is_published": true
+}
+```
+
+欄位說明：
+
+- `slug`: 必填，唯一識別符
+- `title`: 必填，文章標題
+- `type`: 必填，文章類型
+- `content`: 必填，文章內容
+- `cover_image`: 可選，封面圖片 URL
+- `excerpt`: 可選，文章摘要
+- `tags`: 可選，標籤陣列
+- `github_url`: 可選，GitHub 連結
+- `demo_url`: 可選，示範連結
+- `is_published`: 可選，是否發布，預設 false
+
+成功回應 `200 OK`：
+
+```json
+{
+  "success": true,
+  "message": "文章建立成功",
+  "data": {
+    "id": "1",
+    "slug": "my-new-article",
+    "title": "My New Article",
+    "type": "article",
+    "content": "Article content...",
+    "is_published": true,
+    "created_at": "2026-01-01T00:00:00Z"
+  }
+}
+```
+
+可能錯誤：
+
+- `400 BAD_REQUEST`: 缺少必填欄位（slug, title, content）
+- `401 UNAUTHORIZED`: 未提供 Token
+- `403 FORBIDDEN`: 無 `articles:write` 權限
+- `409 CONFLICT`: slug 已存在
+- `500 INTERNAL_ERROR`: 伺服器錯誤
+
+### 12.4 PUT /api/articles/:id
+
+更新文章（需要認證和權限）。
+
+- 認證: 必須帶 Bearer Token
+- 權限: `articles:write`
+
+Path Params:
+
+- `id`: 必填，文章 ID
+
+Request body：
+
+```json
+{
+  "slug": "updated-article",
+  "title": "Updated Article",
+  "type": "article",
+  "content": "Updated content...",
+  "is_published": true
+}
+```
+
+欄位說明：所有欄位皆可選，只更新傳入的欄位。
+
+成功回應 `200 OK`：
+
+```json
+{
+  "success": true,
+  "message": "文章更新成功",
+  "data": {
+    "id": "1",
+    "slug": "updated-article",
+    "title": "Updated Article",
+    "updated_at": "2026-01-01T12:00:00Z"
+  }
+}
+```
+
+可能錯誤：
+
+- `400 BAD_REQUEST`: 缺少文章 ID
+- `401 UNAUTHORIZED`: 未提供 Token
+- `403 FORBIDDEN`: 無 `articles:write` 權限
+- `404 NOT_FOUND`: 找不到該文章
+- `500 INTERNAL_ERROR`: 伺服器錯誤
+
+### 12.5 DELETE /api/articles/:id
+
+刪除文章（需要認證和權限）。
+
+- 認證: 必須帶 Bearer Token
+- 權限: `articles:delete`
+
+Path Params:
+
+- `id`: 必填，文章 ID
+
+成功回應 `200 OK`：
+
+```json
+{
+  "success": true,
+  "message": "文章已成功刪除"
+}
+```
+
+可能錯誤：
+
+- `400 BAD_REQUEST`: 缺少文章 ID
+- `401 UNAUTHORIZED`: 未提供 Token
+- `403 FORBIDDEN`: 無 `articles:delete` 權限
+- `404 NOT_FOUND`: 找不到該文章
+- `500 INTERNAL_ERROR`: 伺服器錯誤
+
+## 13. F. Permissions
+
+### 13.1 GET /api/permissions
 
 - 認證: 必須帶 Bearer Token
 - 權限: `permissions:read`
@@ -748,15 +1027,16 @@ Request body:
 - `403 FORBIDDEN`
 - `500 INTERNAL_ERROR`
 
-## 13. 前端串接提醒
+## 14. 前端串接提醒
 
-- 除了 `GET /`、`POST /api/auth/login`、`GET /api/resume/:lang` 以外，其餘 API 都需要帶 Bearer Token。
+- 除了 `GET /`、`POST /api/auth/login`、`GET /api/resume/:lang` 和公開的 Articles API（`GET /api/articles`、`GET /api/articles/:slug`）以外，其餘 API 都需要帶 Bearer Token。
 - 有 request body 的請求請附帶 `Content-Type: application/json`。
 - 使用者 API 的 request body 使用 `isActive`，response 則是 `is_active`。
 - 角色與權限綁定請使用 `roleIds` 與 `permissionIds`。
-- 當前後端沒有 refresh token、logout API、分頁、搜尋或 Swagger/OpenAPI 文件。
+- 當前後端沒有 refresh token、logout API、以及 Swagger/OpenAPI 文件。
+- Articles API 支持分頁，`page` 和 `pageSize` 參數可用於控制分頁。
 
-## 14. 範例串接
+## 15. 範例串接
 
 ### 登入
 
@@ -777,6 +1057,33 @@ curl http://localhost:8787/api/auth/me \
 
 ```bash
 curl http://localhost:8787/api/resume/zh
+```
+
+### 取得已發布文章列表（分頁）
+
+```bash
+curl "http://localhost:8787/api/articles?page=1&pageSize=10&type=article"
+```
+
+### 取得單篇文章
+
+```bash
+curl http://localhost:8787/api/articles/my-article
+```
+
+### 新增文章
+
+```bash
+curl -X POST http://localhost:8787/api/articles \
+  -H 'Authorization: Bearer <jwt-token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "slug": "my-article",
+    "title": "My Article",
+    "type": "article",
+    "content": "Article content...",
+    "is_published": true
+  }'
 ```
 
 ### 更新履歷

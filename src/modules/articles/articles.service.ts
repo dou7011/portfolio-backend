@@ -13,37 +13,68 @@ export interface ArticlePayload {
 
 
 /**
- * 取得已發布的文章/作品列表，若提供 type 參數則過濾該類型。
+ * 取得已發布的文章/作品列表，支持分頁、類型過濾
+ * @param db D1Database 實例
+ * @param type 文章類型過濾（可選）
+ * @param limit 一頁的文章數量（預設 10）
+ * @param offset 分頁偏移量（預設 0）
+ * @returns 包含文章列表、總數和分頁資訊的物件
  */
-export const getPublishedArticlesService = async (db: D1Database, type?: string, limit?: number) => {
-  let query = `
-    SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, published_at 
-    FROM articles 
-    WHERE is_published = 1
-  `;
-  
-  const params: (string | number)[] = [];
+export const getPublishedArticlesService = async (
+  db: D1Database,
+  type?: string,
+  isPublished: number = 1,
+  limit: number = 10,
+  offset: number = 0
+) => {
+  // 建構 WHERE 條件
+  let whereClause = `WHERE is_published = ?`;
+
+  const params: (string | number)[] = [isPublished];
 
   if (type) {
-    query += ` AND type = ?`;
+    whereClause += ` AND type = ?`;
     params.push(type);
   }
 
-  // 排序必須寫在 LIMIT 的前面
-  query += ` ORDER BY published_at DESC`;
+  // 先取得總數量
+  const countQuery = `SELECT COUNT(*) as total FROM articles ${whereClause}`;
+  const countResult = await db.prepare(countQuery).bind(...params).first();
+  const total = (countResult as any)?.total || 0;
 
-  // 如果 limit 存在，且大於 0 (防禦性過濾掉亂傳的負數或非數字)
-  if (limit && limit > 0) {
-    query += ` LIMIT ?`;
-    params.push(limit);
-  }
+  // 確保 limit 和 offset 為正整數
+  const safeLimit = Math.max(1, Math.min(limit, 100)); // 最多 100 筆
+  const safeOffset = Math.max(0, offset);
 
-  const { results } = await db.prepare(query).bind(...params).all();
+  // 取得分頁後的文章列表
+  const articlesQuery = `
+    SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, published_at 
+    FROM articles 
+    ${whereClause}
+    ORDER BY published_at DESC
+    LIMIT ? OFFSET ?
+  `;
 
-  return results.map(row => ({
+  const { results } = await db
+    .prepare(articlesQuery)
+    .bind(...params, safeLimit, safeOffset)
+    .all();
+
+  const articles = results.map(row => ({
     ...row,
     tags: row.tags ? JSON.parse(row.tags as string) : []
   }));
+
+  return {
+    data: articles,
+    pagination: {
+      total,
+      limit: safeLimit,
+      offset: safeOffset,
+      page: Math.floor(safeOffset / safeLimit) + 1,
+      totalPages: Math.ceil(total / safeLimit)
+    }
+  };
 };
 
 /**

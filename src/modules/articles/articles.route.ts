@@ -29,7 +29,7 @@ articlesRoute.post(
 
 // 更新文章內容，需先通過身份驗證與權限檢查。
 articlesRoute.put(
-  '/:slug',
+  '/:id',
   authGuard,
   permissionGuard(PERMISSIONS.ARTICLE_WRITE),
   updateArticleController
@@ -37,7 +37,7 @@ articlesRoute.put(
 
 // 刪除文章，需先通過身份驗證與權限檢查。
 articlesRoute.delete(
-  '/:slug',
+  '/:id',
   authGuard,
   permissionGuard(PERMISSIONS.ARTICLE_DELETE),
   deleteArticleController
