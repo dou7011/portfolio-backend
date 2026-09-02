@@ -185,28 +185,6 @@ http://localhost:8787
 
 ## API 文件
 
-### 分頁功能
-
-`GET /api/articles` 支持分頁查詢，相關參數：
-
-- `page`: 頁碼（預設 1）
-- `pageSize`: 每頁筆數（預設 10，最多 100）
-- `type`: 文章類型過濾（可選）
-- `is_published`: 發布狀態過濾（可選，預設 1 為已發布）
-
-**範例**：
-
-```bash
-# 取得第 1 頁，每頁 10 篇已發布的文章
-GET /api/articles?page=1&pageSize=10
-
-# 根據類型過濾
-GET /api/articles?type=article&page=1&pageSize=20
-
-# 包含草稿
-GET /api/articles?is_published=0&page=1
-```
-
 ### 完整 API 規格
 
 更完整的路由、回應格式、分頁資訊與錯誤碼請見：

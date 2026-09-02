@@ -114,7 +114,7 @@ Authorization: Bearer <token>
 | PUT | `/api/roles/:id` | Yes | `roles:write` | 更新角色 |
 | DELETE | `/api/roles/:id` | Yes | `roles:delete` | 刪除角色 |
 | GET | `/api/permissions` | Yes | `permissions:read` | 取得權限列表 |
-| GET | `/api/articles` | No | No | 取得已發布文章列表（支持分頁） |
+| GET | `/api/articles` | No | No | 取得已發布文章列表（支持分頁與發布時間區間篩選） |
 | GET | `/api/articles/:slug` | No | No | 根據 slug 取得單篇文章 |
 | POST | `/api/articles` | Yes | `articles:write` | 新增文章 |
 | PUT | `/api/articles/:id` | Yes | `articles:write` | 更新文章 |
@@ -775,7 +775,7 @@ Request body:
 
 ### 12.1 GET /api/articles
 
-取得已發布的文章列表，支持分頁和類型過濾。
+取得已發布的文章列表，支持分頁、類型與發布時間區間過濾。
 
 - 認證: 無
 - 權限: 無
@@ -786,6 +786,10 @@ Query Parameters:
 - `pageSize`: 可選，每頁文章數，預設 10，最多 100
 - `type`: 可選，文章類型過濾
 - `is_published`: 可選，是否發布（1=已發布，0=草稿），預設 1
+- `startTime`: 可選，發布時間下限（含），ISO 8601 格式，例如 `2026-01-01T00:00:00Z`
+- `endTime`: 可選，發布時間上限（含），ISO 8601 格式，例如 `2026-12-31T23:59:59Z`
+
+範例：`GET /api/articles?startTime=2026-01-01T00:00:00Z&endTime=2026-12-31T23:59:59Z`
 
 成功回應 `200 OK`：
 
@@ -817,6 +821,7 @@ Query Parameters:
 
 可能錯誤：
 
+- `400 BAD_REQUEST`: `startTime` 或 `endTime` 格式無效，或開始時間晚於結束時間
 - `500 INTERNAL_ERROR`: 伺服器錯誤
 
 ### 12.2 GET /api/articles/:slug

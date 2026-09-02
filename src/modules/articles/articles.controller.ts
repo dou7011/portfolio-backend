@@ -29,14 +29,31 @@ export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
     // 解析 page 參數（第幾頁，預設 1）
     const pageQuery = c.req.query('page');
     const page = pageQuery ? Math.max(parseInt(pageQuery, 10), 1) : 1;
+
+    const startTime = c.req.query('startTime');
+    const endTime = c.req.query('endTime');
+    if ((startTime && Number.isNaN(Date.parse(startTime))) || (endTime && Number.isNaN(Date.parse(endTime)))) {
+      return fail(c, 400, 'BAD_REQUEST', 'startTime 與 endTime 必須為有效的 ISO 8601 時間');
+    }
+    if (startTime && endTime && new Date(startTime) > new Date(endTime)) {
+      return fail(c, 400, 'BAD_REQUEST', 'startTime 不可晚於 endTime');
+    }
     
     // 計算 offset
     const offset = (page - 1) * pageSize;
 
     const db = c.env.DB;
-    const result = await getPublishedArticlesService(db, type, published, pageSize, offset);
+    const result = await getPublishedArticlesService(
+      db,
+      type,
+      published,
+      pageSize,
+      offset,
+      startTime,
+      endTime
+    );
     
-    return ok(c, result);
+    return ok(c, { data: result });
   } catch (error: any) {
     logger.error('getPublishedArticlesController', error);
     return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');

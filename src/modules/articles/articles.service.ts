@@ -25,7 +25,9 @@ export const getPublishedArticlesService = async (
   type?: string,
   isPublished: number = 1,
   limit: number = 10,
-  offset: number = 0
+  offset: number = 0,
+  startTime?: string,
+  endTime?: string
 ) => {
   // 建構 WHERE 條件
   let whereClause = `WHERE is_published = ?`;
@@ -35,6 +37,16 @@ export const getPublishedArticlesService = async (
   if (type) {
     whereClause += ` AND type = ?`;
     params.push(type);
+  }
+
+  if (startTime) {
+    whereClause += ` AND published_at >= ?`;
+    params.push(startTime);
+  }
+
+  if (endTime) {
+    whereClause += ` AND published_at <= ?`;
+    params.push(endTime);
   }
 
   // 先取得總數量
