@@ -23,6 +23,7 @@ export interface ArticlePayload {
 export const getPublishedArticlesService = async (
   db: D1Database,
   type?: string,
+  tag?: string,
   isPublished: number = 1,
   limit: number = 10,
   offset: number = 0,
@@ -31,7 +32,6 @@ export const getPublishedArticlesService = async (
 ) => {
   // 建構 WHERE 條件
   let whereClause = `WHERE is_published = ?`;
-
   const params: (string | number)[] = [isPublished];
 
   if (type) {
@@ -39,6 +39,11 @@ export const getPublishedArticlesService = async (
     params.push(type);
   }
 
+  if (tag) {
+    whereClause += ` AND tags LIKE ?`;
+    params.push(`%${tag}%`);
+  }
+  
   if (startTime) {
     whereClause += ` AND published_at >= ?`;
     params.push(startTime);
@@ -49,16 +54,14 @@ export const getPublishedArticlesService = async (
     params.push(endTime);
   }
 
-  // 先取得總數量
-  const countQuery = `SELECT COUNT(*) as total FROM articles ${whereClause}`;
-  const countResult = await db.prepare(countQuery).bind(...params).first();
-  const total = (countResult as any)?.total || 0;
-
   // 確保 limit 和 offset 為正整數
   const safeLimit = Math.max(1, Math.min(limit, 100)); // 最多 100 筆
   const safeOffset = Math.max(0, offset);
 
-  // 取得分頁後的文章列表
+  // 查詢 1：取得總數量
+  const countQuery = `SELECT COUNT(*) as total FROM articles ${whereClause}`;
+
+  // 查詢 2：取得分頁後的文章列表
   const articlesQuery = `
     SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, published_at 
     FROM articles 
@@ -67,12 +70,60 @@ export const getPublishedArticlesService = async (
     LIMIT ? OFFSET ?
   `;
 
-  const { results } = await db
-    .prepare(articlesQuery)
-    .bind(...params, safeLimit, safeOffset)
-    .all();
+  // 查詢 3：取得標籤統計 (聚合)，支援動態反灰
+  const tagsAggregationsQuery = `
+    WITH AllTags AS (
+      SELECT DISTINCT value AS tag_name 
+      FROM articles, json_each(articles.tags) 
+      WHERE tags IS NOT NULL
+    ),
+    FilteredTags AS (
+      SELECT value AS tag_name, COUNT(articles.id) AS count
+      FROM articles, json_each(articles.tags)
+      ${whereClause}
+      GROUP BY value
+    )
+    SELECT AllTags.tag_name as name, COALESCE(FilteredTags.count, 0) AS count
+    FROM AllTags
+    LEFT JOIN FilteredTags ON AllTags.tag_name = FilteredTags.tag_name
+    ORDER BY count DESC, name ASC;
+  `;
 
-  const articles = results.map(row => ({
+  // 查詢 4：取得分類 (Type) 統計 (聚合)
+  const categoryAggregationsQuery = `
+    WITH AllTypes AS (
+      SELECT DISTINCT type AS category_name 
+      FROM articles 
+      WHERE type IS NOT NULL
+    ),
+    FilteredTypes AS (
+      SELECT type AS category_name, COUNT(id) AS count
+      FROM articles
+      ${whereClause}
+      GROUP BY type
+    )
+    SELECT AllTypes.category_name as name, COALESCE(FilteredTypes.count, 0) AS count
+    FROM AllTypes
+    LEFT JOIN FilteredTypes ON AllTypes.category_name = FilteredTypes.category_name
+    ORDER BY count DESC, name ASC;
+  `;
+
+  // 將四個獨立的查詢打包，平行發出請求以提升效能
+  const [
+    countResult, 
+    articlesResult, 
+    tagsAggResult, 
+    categoryAggResult
+  ] = await Promise.all([
+    db.prepare(countQuery).bind(...params).first(),
+    db.prepare(articlesQuery).bind(...params, safeLimit, safeOffset).all(),
+    db.prepare(tagsAggregationsQuery).bind(...params).all(),
+    db.prepare(categoryAggregationsQuery).bind(...params).all()
+  ]);
+
+  const total = (countResult as any)?.total || 0;
+
+  const articles = articlesResult.results.map(row => ({
     ...row,
     tags: row.tags ? JSON.parse(row.tags as string) : []
   }));
@@ -85,6 +136,10 @@ export const getPublishedArticlesService = async (
       offset: safeOffset,
       page: Math.floor(safeOffset / safeLimit) + 1,
       totalPages: Math.ceil(total / safeLimit)
+    },
+    aggregations: {
+      categories: categoryAggResult.results,  // 回傳分類的統計資料
+      tags: tagsAggResult.results  // 回傳標籤的統計資料
     }
   };
 };

@@ -17,6 +17,7 @@ type ArticlePayload
 export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
   try {
     const type = c.req.query('type');
+    const tag = c.req.query('tag');
     
     // 解析 is_published 參數（是否發布，預設 1 已發布）
     const publishedQuery = c.req.query('is_published');
@@ -46,6 +47,7 @@ export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
     const result = await getPublishedArticlesService(
       db,
       type,
+      tag,
       published,
       pageSize,
       offset,

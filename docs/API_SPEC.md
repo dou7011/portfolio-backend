@@ -63,7 +63,7 @@ Authorization: Bearer <token>
 - `roles:read`
 - `roles:write`
 - `roles:delete`
-  - `articles:write`
+- `articles:write`
 - `articles:delete`
 - `permissions:read`
 
@@ -240,15 +240,35 @@ Authorization: Bearer <token>
 }
 ```
 
-### 6.7 Pagination
+### 6.7 Pagination & Aggregations
 
 ```json
 {
-  "total": 50,
-  "limit": 10,
-  "offset": 0,
-  "page": 1,
-  "totalPages": 5
+  "pagination": {
+    "total": 50,
+    "limit": 10,
+    "offset": 0,
+    "page": 1,
+    "totalPages": 5
+  },
+  "aggregations": {
+    "categories": [
+      {
+        "name": "blog",
+        "count": 3
+      },
+      {
+        "name": "portfolio",
+        "count": 2
+      }
+    ],
+    "tags": [
+      {
+        "name": "Frontend",
+        "count": 5
+      }
+    ]
+  }
 }
 ```
 
@@ -259,6 +279,8 @@ Authorization: Bearer <token>
 - `offset`: 資料庫 OFFSET 值
 - `page`: 當前頁碼
 - `totalPages`: 總頁數
+- `aggregations.categories`: 符合當前篩選條件下，所有分類 (type) 的聚合統計（`name` 為分類名稱，`count` 為文章數量）
+- `aggregations.tags`: 符合當前篩選條件下，所有標籤的聚合統計（`name` 為標籤名稱，`count` 為文章數量）
 
 ## 7. A. 健康檢查
 
@@ -775,54 +797,87 @@ Request body:
 
 ### 12.1 GET /api/articles
 
-取得已發布的文章列表，支持分頁、類型與發布時間區間過濾。
+取得文章列表，支持分頁、類型、標籤、發布狀態與發布時間區間過濾，並回傳聚合標籤統計（支援動態反灰/計數）。
 
 - 認證: 無
 - 權限: 無
 
 Query Parameters:
 
-- `page`: 可選，頁碼，預設 1
-- `pageSize`: 可選，每頁文章數，預設 10，最多 100
-- `type`: 可選，文章類型過濾
-- `is_published`: 可選，是否發布（1=已發布，0=草稿），預設 1
+- `page`: 可選，頁碼，預設 `1`
+- `pageSize`: 可選，每頁文章數，預設 `10`，最多 `100`
+- `type`: 可選，文章類型過濾 (例如：`blog`, `project`)
+- `tag`: 可選，標籤名稱過濾 (例如：`Frontend`, `Vue.js`)
+- `is_published`: 可選，是否發布狀態過濾（`1` = 已發布，`0` = 草稿），預設 `1`
 - `startTime`: 可選，發布時間下限（含），ISO 8601 格式，例如 `2026-01-01T00:00:00Z`
 - `endTime`: 可選，發布時間上限（含），ISO 8601 格式，例如 `2026-12-31T23:59:59Z`
 
-範例：`GET /api/articles?startTime=2026-01-01T00:00:00Z&endTime=2026-12-31T23:59:59Z`
+範例：
+- `GET /api/articles?page=1&pageSize=10&type=blog&tag=Vue.js`
+- `GET /api/articles?startTime=2026-01-01T00:00:00Z&endTime=2026-12-31T23:59:59Z`
 
 成功回應 `200 OK`：
 
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "1",
-      "slug": "my-article",
-      "title": "My Article",
-      "type": "article",
-      "cover_image": "https://example.com/image.jpg",
-      "excerpt": "Article summary...",
-      "tags": ["tag1", "tag2"],
-      "view_count": 100,
-      "published_at": "2026-01-01T00:00:00Z"
+  "data": {
+    "data": [
+      {
+        "id": "1",
+        "slug": "my-article",
+        "title": "My Article",
+        "type": "blog",
+        "cover_image": "https://example.com/image.jpg",
+        "excerpt": "Article summary...",
+        "tags": ["Frontend", "Vue.js"],
+        "view_count": 100,
+        "published_at": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "total": 50,
+      "limit": 10,
+      "offset": 0,
+      "page": 1,
+      "totalPages": 5
+    },
+    "aggregations": {
+      "categories": [
+        {
+          "name": "blog",
+          "count": 3
+        },
+        {
+          "name": "portfolio",
+          "count": 2
+        }
+      ],
+      "tags": [
+        {
+          "name": "Frontend",
+          "count": 5
+        },
+        {
+          "name": "Azure",
+          "count": 0
+        }
+      ]
     }
-  ],
-  "pagination": {
-    "total": 50,
-    "limit": 10,
-    "offset": 0,
-    "page": 1,
-    "totalPages": 5
   }
 }
 ```
 
+回應欄位說明：
+- `data`: 符合條件的文章列表陣列
+- `pagination`: 分頁資訊（包含 `total`, `limit`, `offset`, `page`, `totalPages`）
+- `aggregations.categories`: 所有已存在的文章分類於當前篩選條件下的數量統計列表。
+- `aggregations.tags`: 所有已存在的標籤於當前篩選條件下的文章數量統計列表。若數量為 `0` 可用於前端介面的動態反灰顯示。
+
 可能錯誤：
 
-- `400 BAD_REQUEST`: `startTime` 或 `endTime` 格式無效，或開始時間晚於結束時間
-- `500 INTERNAL_ERROR`: 伺服器錯誤
+- `400 BAD_REQUEST`: `startTime` 或 `endTime` 格式無效（非 ISO 8601 格式），或 `startTime` 晚於 `endTime`
+- `500 INTERNAL_ERROR`: 伺服器內部錯誤
 
 ### 12.2 GET /api/articles/:slug
 
