@@ -32,29 +32,30 @@ export const getPublishedArticlesService = async (
 ) => {
   // 建構 WHERE 條件
   // baseWhereClause 僅過濾 is_published，用於「全部資料」的分類統計，不受其他篩選條件影響
-  const baseWhereClause = `WHERE is_published = ?`;
+  const baseWhereClause = `WHERE articles.is_published = ?`;
   const baseParams: (string | number)[] = [isPublished];
 
-  let whereClause = `WHERE is_published = ?`;
+  // 欄位皆以 articles. 前綴限定，避免與 json_each 產生的欄位（如 type）名稱衝突
+  let whereClause = `WHERE articles.is_published = ?`;
   const params: (string | number)[] = [isPublished];
 
   if (type) {
-    whereClause += ` AND type = ?`;
+    whereClause += ` AND articles.type = ?`;
     params.push(type);
   }
 
   if (tag) {
-    whereClause += ` AND tags LIKE ?`;
+    whereClause += ` AND articles.tags LIKE ?`;
     params.push(`%${tag}%`);
   }
   
   if (startTime) {
-    whereClause += ` AND published_at >= ?`;
+    whereClause += ` AND articles.published_at >= ?`;
     params.push(startTime);
   }
 
   if (endTime) {
-    whereClause += ` AND published_at <= ?`;
+    whereClause += ` AND articles.published_at <= ?`;
     params.push(endTime);
   }
 
