@@ -31,6 +31,10 @@ export const getPublishedArticlesService = async (
   endTime?: string
 ) => {
   // 建構 WHERE 條件
+  // baseWhereClause 僅過濾 is_published，用於「全部資料」的分類統計，不受其他篩選條件影響
+  const baseWhereClause = `WHERE is_published = ?`;
+  const baseParams: (string | number)[] = [isPublished];
+
   let whereClause = `WHERE is_published = ?`;
   const params: (string | number)[] = [isPublished];
 
@@ -89,7 +93,7 @@ export const getPublishedArticlesService = async (
     ORDER BY count DESC, name ASC;
   `;
 
-  // 查詢 4：取得分類 (Type) 統計 (聚合)
+  // 查詢 4：取得分類 (Type) 統計 (聚合)，統計全部資料，不受篩選條件影響
   const categoryAggregationsQuery = `
     WITH AllTypes AS (
       SELECT DISTINCT type AS category_name 
@@ -99,7 +103,7 @@ export const getPublishedArticlesService = async (
     FilteredTypes AS (
       SELECT type AS category_name, COUNT(id) AS count
       FROM articles
-      ${whereClause}
+      ${baseWhereClause}
       GROUP BY type
     )
     SELECT AllTypes.category_name as name, COALESCE(FilteredTypes.count, 0) AS count
@@ -118,7 +122,7 @@ export const getPublishedArticlesService = async (
     db.prepare(countQuery).bind(...params).first(),
     db.prepare(articlesQuery).bind(...params, safeLimit, safeOffset).all(),
     db.prepare(tagsAggregationsQuery).bind(...params).all(),
-    db.prepare(categoryAggregationsQuery).bind(...params).all()
+    db.prepare(categoryAggregationsQuery).bind(...baseParams).all()
   ]);
 
   const total = (countResult as any)?.total || 0;
