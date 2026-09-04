@@ -30,33 +30,53 @@ export const getPublishedArticlesService = async (
   startTime?: string,
   endTime?: string
 ) => {
-  // 建構 WHERE 條件
-  // baseWhereClause 僅過濾 is_published，用於「全部資料」的分類統計，不受其他篩選條件影響
+  // 用於 Category 統計，不受任何篩選條件影響
   const baseWhereClause = `WHERE articles.is_published = ?`;
   const baseParams: (string | number)[] = [isPublished];
 
-  // 欄位皆以 articles. 前綴限定，避免與 json_each 產生的欄位（如 type）名稱衝突
+  // 1. 用於 AllTags：只受 type 影響，確保顯示該分類下的「所有標籤」
+  let typeWhereClause = `WHERE articles.is_published = ?`;
+  const typeParams: (string | number)[] = [isPublished];
+
+  // 2. 用於 FilteredTags：受 type 與 date 影響，用來計算標籤數量 (排除 tag 條件)
+  let tagsWhereClause = `WHERE articles.is_published = ?`;
+  const tagsParams: (string | number)[] = [isPublished];
+
+  // 3. 用於文章列表：受所有條件影響 (包含 tag)
   let whereClause = `WHERE articles.is_published = ?`;
   const params: (string | number)[] = [isPublished];
 
   if (type) {
+    typeWhereClause += ` AND articles.type = ?`;
+    typeParams.push(type);
+
+    tagsWhereClause += ` AND articles.type = ?`;
+    tagsParams.push(type);
+
     whereClause += ` AND articles.type = ?`;
     params.push(type);
   }
 
-  if (tag) {
-    whereClause += ` AND articles.tags LIKE ?`;
-    params.push(`%${tag}%`);
-  }
-  
   if (startTime) {
+    tagsWhereClause += ` AND articles.published_at >= ?`;
+    tagsParams.push(startTime);
+
     whereClause += ` AND articles.published_at >= ?`;
     params.push(startTime);
   }
 
   if (endTime) {
+    tagsWhereClause += ` AND articles.published_at <= ?`;
+    tagsParams.push(endTime);
+
     whereClause += ` AND articles.published_at <= ?`;
     params.push(endTime);
+  }
+
+  if (tag) {
+    // 💡 關鍵修改：tag 條件只加進文章列表的 whereClause，不影響標籤雲的計算
+    whereClause += ` AND articles.tags LIKE ?`;
+    params.push(`%${tag}%`);
   }
 
   // 確保 limit 和 offset 為正整數
@@ -80,12 +100,12 @@ export const getPublishedArticlesService = async (
     WITH AllTags AS (
       SELECT DISTINCT value AS tag_name 
       FROM articles, json_each(articles.tags) 
-      WHERE tags IS NOT NULL
+      ${typeWhereClause} AND articles.tags IS NOT NULL
     ),
     FilteredTags AS (
       SELECT value AS tag_name, COUNT(articles.id) AS count
       FROM articles, json_each(articles.tags)
-      ${whereClause}
+      ${tagsWhereClause} AND articles.tags IS NOT NULL
       GROUP BY value
     )
     SELECT AllTags.tag_name as name, COALESCE(FilteredTags.count, 0) AS count
@@ -94,7 +114,7 @@ export const getPublishedArticlesService = async (
     ORDER BY count DESC, name ASC;
   `;
 
-  // 查詢 4：取得分類 (Type) 統計 (聚合)，統計全部資料，不受篩選條件影響
+  // 查詢 4：取得分類 (Type) 統計 (聚合)
   const categoryAggregationsQuery = `
     WITH AllTypes AS (
       SELECT DISTINCT type AS category_name 
@@ -113,7 +133,7 @@ export const getPublishedArticlesService = async (
     ORDER BY count DESC, name ASC;
   `;
 
-  // 將四個獨立的查詢打包，平行發出請求以提升效能
+  // 將四個獨立的查詢打包，平行發出請求
   const [
     countResult, 
     articlesResult, 
@@ -122,7 +142,8 @@ export const getPublishedArticlesService = async (
   ] = await Promise.all([
     db.prepare(countQuery).bind(...params).first(),
     db.prepare(articlesQuery).bind(...params, safeLimit, safeOffset).all(),
-    db.prepare(tagsAggregationsQuery).bind(...params).all(),
+    // 💡 注意這裡：傳入 typeParams 與 tagsParams，而不是 params
+    db.prepare(tagsAggregationsQuery).bind(...typeParams, ...tagsParams).all(),
     db.prepare(categoryAggregationsQuery).bind(...baseParams).all()
   ]);
 
@@ -143,8 +164,8 @@ export const getPublishedArticlesService = async (
       totalPages: Math.ceil(total / safeLimit)
     },
     aggregations: {
-      categories: categoryAggResult.results,  // 回傳分類的統計資料
-      tags: tagsAggResult.results  // 回傳標籤的統計資料
+      categories: categoryAggResult.results,
+      tags: tagsAggResult.results
     }
   };
 };
