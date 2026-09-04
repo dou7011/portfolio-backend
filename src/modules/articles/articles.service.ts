@@ -187,7 +187,6 @@ export const getPublishedArticlesService = async (
   return {
     data: articles,
     pagination: {
-      total: totalFiltered,           // 為了相容前端原本的讀取習慣
       totalFiltered: totalFiltered,   // 明確的：過濾後的文章總數 (例如 5 篇)
       totalAll: totalAll,             // 新增的：資料庫所有的文章總數 (例如 15 篇)
       limit: safeLimit,
