@@ -31,49 +31,27 @@ export const getPublishedArticlesService = async (
   endTime?: string
 ) => {
   // ==========================================
-  // 1. 條件拆分 (精準控制每個區塊的連動邏輯)
+  // 1. 三層獨立的 WHERE 條件
   // ==========================================
 
-  // [條件 A] 絕對總數：無過濾
-  const baseWhereClause = `WHERE articles.is_published = ?`;
-  const baseParams: (string | number)[] = [isPublished];
-
-  // [條件 B] AllTags 清單：【僅受 Type 影響】，決定該分類下有哪些標籤
-  let typeWhereClause = `WHERE articles.is_published = ?`;
-  const typeParams: (string | number)[] = [isPublished];
-
-  // [條件 C] 分類統計 (Categories)：受 Date, Tag 影響，【不受 Type 影響】
+  // [層級 1] 分類統計：僅受 Date 影響
   let categoryWhereClause = `WHERE articles.is_published = ?`;
   const categoryParams: (string | number)[] = [isPublished];
 
-  // [條件 D] 標籤統計 (Tags)：受 Type, Date 影響，【不受 Tag 影響】
+  // [層級 2] 標籤統計：受 Date, Type 影響
   let tagsWhereClause = `WHERE articles.is_published = ?`;
   const tagsParams: (string | number)[] = [isPublished];
 
-  // [條件 E] 文章列表與篩選後總數：受 Type, Date, Tag【所有條件】影響
+  // [層級 3] 實際結果：受 Date, Type, Tag 所有條件影響
   let whereClause = `WHERE articles.is_published = ?`;
   const params: (string | number)[] = [isPublished];
 
-  // --- 處理 Type ---
-  if (type) {
-    typeWhereClause += ` AND articles.type = ?`;
-    typeParams.push(type);
-
-    tagsWhereClause += ` AND articles.type = ?`;
-    tagsParams.push(type);
-
-    whereClause += ` AND articles.type = ?`;
-    params.push(type);
-  }
-
-  // --- 處理 Date ---
+  // --- 處理 Date (影響所有人) ---
   if (startTime) {
     categoryWhereClause += ` AND articles.published_at >= ?`;
     categoryParams.push(startTime);
-
     tagsWhereClause += ` AND articles.published_at >= ?`;
     tagsParams.push(startTime);
-
     whereClause += ` AND articles.published_at >= ?`;
     params.push(startTime);
   }
@@ -81,19 +59,22 @@ export const getPublishedArticlesService = async (
   if (endTime) {
     categoryWhereClause += ` AND articles.published_at <= ?`;
     categoryParams.push(endTime);
-
     tagsWhereClause += ` AND articles.published_at <= ?`;
     tagsParams.push(endTime);
-
     whereClause += ` AND articles.published_at <= ?`;
     params.push(endTime);
   }
 
-  // --- 處理 Tag ---
-  if (tag) {
-    categoryWhereClause += ` AND articles.tags LIKE ?`;
-    categoryParams.push(`%${tag}%`);
+  // --- 處理 Type (影響 Tags, Articles) ---
+  if (type) {
+    tagsWhereClause += ` AND articles.type = ?`;
+    tagsParams.push(type);
+    whereClause += ` AND articles.type = ?`;
+    params.push(type);
+  }
 
+  // --- 處理 Tag (僅影響 Articles) ---
+  if (tag) {
     whereClause += ` AND articles.tags LIKE ?`;
     params.push(`%${tag}%`);
   }
@@ -105,13 +86,11 @@ export const getPublishedArticlesService = async (
   // 2. 構建並行 SQL 查詢
   // ==========================================
 
-  // 查詢 1: 絕對資料總數 (不受任何條件影響)
-  const totalAllQuery = `SELECT COUNT(*) as count FROM articles ${baseWhereClause}`;
-
-  // 查詢 2: 篩選後資料總數 (用於分頁與全部文章計算)
+  // 各自的總數量
+  const categoriesTotalQuery = `SELECT COUNT(*) as count FROM articles ${categoryWhereClause}`;
+  const tagsTotalQuery = `SELECT COUNT(*) as count FROM articles ${tagsWhereClause}`;
   const filteredTotalQuery = `SELECT COUNT(*) as count FROM articles ${whereClause}`;
 
-  // 查詢 3: 實際文章列表
   const articlesQuery = `
     SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, published_at 
     FROM articles 
@@ -120,16 +99,13 @@ export const getPublishedArticlesService = async (
     LIMIT ? OFFSET ?
   `;
 
-  // 查詢 4: 分類統計 (加上 LEFT JOIN 確保未選中的分類顯示 0，而不是消失)
+  // 分類聚合 (保留 LEFT JOIN：讓日期區間內沒有文章的分類顯示 0，不消失)
   const categoryAggregationsQuery = `
     WITH AllTypes AS (
-      SELECT DISTINCT type AS category_name 
-      FROM articles 
-      WHERE type IS NOT NULL
+      SELECT DISTINCT type AS category_name FROM articles WHERE is_published = 1 AND type IS NOT NULL
     ),
     FilteredTypes AS (
-      SELECT type AS category_name, COUNT(id) AS count
-      FROM articles
+      SELECT type AS category_name, COUNT(id) AS count FROM articles
       ${categoryWhereClause}
       GROUP BY type
     )
@@ -139,46 +115,32 @@ export const getPublishedArticlesService = async (
     ORDER BY count DESC, name ASC;
   `;
 
-  // 查詢 5: 標籤統計
+  // 標籤聚合 (極簡化：完全依照目前的 Type 與 Date 動態生成標籤，不補 0)
   const tagsAggregationsQuery = `
-    WITH AllTags AS (
-      SELECT DISTINCT value AS tag_name 
-      FROM articles, json_each(articles.tags) 
-      ${typeWhereClause} AND articles.tags IS NOT NULL
-    ),
-    FilteredTags AS (
-      SELECT value AS tag_name, COUNT(articles.id) AS count
-      FROM articles, json_each(articles.tags)
-      ${tagsWhereClause} AND articles.tags IS NOT NULL
-      GROUP BY value
-    )
-    SELECT AllTags.tag_name as name, COALESCE(FilteredTags.count, 0) AS count
-    FROM AllTags
-    LEFT JOIN FilteredTags ON AllTags.tag_name = FilteredTags.tag_name
+    SELECT value AS name, COUNT(articles.id) AS count
+    FROM articles, json_each(articles.tags)
+    ${tagsWhereClause} AND articles.tags IS NOT NULL
+    GROUP BY value
     ORDER BY count DESC, name ASC;
   `;
 
-  // ==========================================
-  // 3. 執行查詢與回傳組合
-  // ==========================================
-
   const [
-    totalAllResult,
+    categoriesTotalResult,
+    tagsTotalResult,
     filteredTotalResult,
-    articlesResult, 
-    tagsAggResult, 
-    categoryAggResult
+    articlesResult,
+    categoryAggResult,
+    tagsAggResult
   ] = await Promise.all([
-    db.prepare(totalAllQuery).bind(...baseParams).first(),
+    db.prepare(categoriesTotalQuery).bind(...categoryParams).first(),
+    db.prepare(tagsTotalQuery).bind(...tagsParams).first(),
     db.prepare(filteredTotalQuery).bind(...params).first(),
     db.prepare(articlesQuery).bind(...params, safeLimit, safeOffset).all(),
-    db.prepare(tagsAggregationsQuery).bind(...typeParams, ...tagsParams).all(),
-    db.prepare(categoryAggregationsQuery).bind(...categoryParams).all()
+    db.prepare(categoryAggregationsQuery).bind(...categoryParams).all(),
+    db.prepare(tagsAggregationsQuery).bind(...tagsParams).all()
   ]);
 
-  const totalAll = (totalAllResult as any)?.count || 0;
   const totalFiltered = (filteredTotalResult as any)?.count || 0;
-
   const articles = articlesResult.results.map(row => ({
     ...row,
     tags: row.tags ? JSON.parse(row.tags as string) : []
@@ -187,14 +149,15 @@ export const getPublishedArticlesService = async (
   return {
     data: articles,
     pagination: {
-      totalFiltered: totalFiltered,   // 明確的：過濾後的文章總數 (例如 5 篇)
-      totalAll: totalAll,             // 新增的：資料庫所有的文章總數 (例如 15 篇)
+      totalFiltered: totalFiltered,   
       limit: safeLimit,
       offset: safeOffset,
       page: Math.floor(safeOffset / safeLimit) + 1,
-      totalPages: Math.ceil(totalFiltered / safeLimit) // 分頁依據過濾後的數量計算
+      totalPages: Math.ceil(totalFiltered / safeLimit) || 1
     },
     aggregations: {
+      totalCategories: (categoriesTotalResult as any)?.count || 0,
+      totalTags: (tagsTotalResult as any)?.count || 0,             
       categories: categoryAggResult.results,
       tags: tagsAggResult.results 
     }
