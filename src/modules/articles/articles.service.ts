@@ -74,7 +74,6 @@ export const getPublishedArticlesService = async (
   }
 
   if (tag) {
-    // 💡 關鍵修改：tag 條件只加進文章列表的 whereClause，不影響標籤雲的計算
     whereClause += ` AND articles.tags LIKE ?`;
     params.push(`%${tag}%`);
   }
@@ -142,7 +141,6 @@ export const getPublishedArticlesService = async (
   ] = await Promise.all([
     db.prepare(countQuery).bind(...params).first(),
     db.prepare(articlesQuery).bind(...params, safeLimit, safeOffset).all(),
-    // 💡 注意這裡：傳入 typeParams 與 tagsParams，而不是 params
     db.prepare(tagsAggregationsQuery).bind(...typeParams, ...tagsParams).all(),
     db.prepare(categoryAggregationsQuery).bind(...baseParams).all()
   ]);
