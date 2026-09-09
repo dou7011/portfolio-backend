@@ -24,7 +24,7 @@ export const getArticlesController = async (c: Context<AppEnv>) => {
     const type = c.req.query('type');
     const tag = c.req.query('tag');
 
-    // 解析 is_published 參數（是否發布）；未帶入時交由呼叫端（公開/後台端點）決定預設值
+    // 判斷是否需要過濾已發布的文章，若使用者無查看草稿的權限，則預設只顯示已發布的文章
     const publishedQuery = !canViewDrafts ? '1' : c.req.query('is_published');
     const published = publishedQuery !== undefined ? parseInt(publishedQuery, 10) : 1;
 
