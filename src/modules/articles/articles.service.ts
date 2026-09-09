@@ -102,7 +102,7 @@ export const getArticlesService = async (
   const filteredTotalQuery = `SELECT COUNT(*) as count FROM articles ${whereClause}`;
 
   const articlesQuery = `
-    SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, published_at 
+    SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, is_published, published_at 
     FROM articles 
     ${whereClause}
     ORDER BY published_at DESC
