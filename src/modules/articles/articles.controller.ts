@@ -17,46 +17,15 @@ type ArticlePayload
  */
 export const getArticlesController = async (c: Context<AppEnv>) => {
   try {
-    const queryResult = getQuery(c);
-    
-    // 透過 Type Guard 提早攔截錯誤，TypeScript 就再也不會報錯了
-    if (queryResult.error) {
-      return queryResult.error;
-    }
-    const query = queryResult.data!;
-    
+    // 取得使用者資訊，判斷是否有查看草稿的權限
     const user = c.get('user');
     const canViewDrafts = user?.permissions.includes(PERMISSIONS.ARTICLE_WRITE) ?? false;
-    if (!canViewDrafts) {
-      query.published = 1;
-    }
 
-    const db = c.env.DB;
-    const result = await getArticlesService(
-      db,
-      query.type,
-      query.tag,
-      query.published,
-      query.pageSize,
-      query.offset,
-      query.startTime,
-      query.endTime
-    );
-    
-    return ok(c, { data: result });
-  } catch (error: any) {
-    logger.error('getArticlesController', error);
-    return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
-  }
-};
-
-const getQuery = (c: Context<AppEnv>) => {
-  try {
     const type = c.req.query('type');
     const tag = c.req.query('tag');
 
     // 解析 is_published 參數（是否發布）；未帶入時交由呼叫端（公開/後台端點）決定預設值
-    const publishedQuery = c.req.query('is_published');
+    const publishedQuery = !canViewDrafts ? '1' : c.req.query('is_published');
     const published = publishedQuery !== undefined ? parseInt(publishedQuery, 10) : undefined;
 
     // 解析 pageSize 參數（每頁文章數，預設 10，最多 100）
@@ -79,20 +48,13 @@ const getQuery = (c: Context<AppEnv>) => {
     // 計算 offset
     const offset = (page - 1) * pageSize;
 
-    return {
-      data: {
-        type,
-        tag,
-        published,
-        pageSize,
-        offset,
-        startTime,
-        endTime
-      }
-    };
+    const db = c.env.DB;
+    const result = await getArticlesService( db, type, tag, published, pageSize, offset, startTime, endTime );
+    
+    return ok(c, { data: result });
   } catch (error: any) {
-    logger.error('getQuery', error);
-    return { error: fail(c, 500, 'INTERNAL_ERROR', '參數解析發生錯誤') };
+    logger.error('getArticlesController', error);
+    return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
   }
 };
 
