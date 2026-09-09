@@ -116,9 +116,23 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 JWT_SECRET=your-local-secret
 ```
 
-若需要允許前端來源，請在 `wrangler.jsonc` 的 `ALLOWED_ORIGINS` 或部署環境變數中設定。
+`ALLOWED_ORIGINS` 目前由 `wrangler.jsonc` 的 `vars` 提供，使用逗號分隔多個來源。不要把 `JWT_SECRET` 寫入 `wrangler.jsonc` 或提交到 Git。
 
-### 5. 啟動開發伺服器
+### 5. 建立本機登入帳號
+
+`seed.sql` 不會建立使用者，第一次啟動前請先產生密碼雜湊：
+
+```bash
+npm run gen:seed-user
+```
+
+將指令輸出的使用者 `INSERT` SQL 與角色綁定 SQL 貼入 `seed.sql` 的對應位置，或另存為 SQL 檔後執行：
+
+```bash
+npx wrangler d1 execute portfolio-db --local --file=./seed-user.sql
+```
+
+### 6. 啟動開發伺服器
 
 ```bash
 npm run dev
@@ -129,6 +143,21 @@ npm run dev
 ```text
 http://localhost:8787
 ```
+
+## 部署到 Cloudflare
+
+第一次部署或資料庫尚未初始化時，依序執行：
+
+```bash
+npx wrangler secret put JWT_SECRET
+npx wrangler d1 execute portfolio-db --remote --file=./schema.sql
+npx wrangler d1 execute portfolio-db --remote --file=./seed.sql
+npm run deploy
+```
+
+遠端 D1 的 seed 同樣不會建立使用者；請先用 `npm run gen:seed-user` 產生 SQL，再以 `--remote` 執行。正式環境請確認 `ALLOWED_ORIGINS` 已包含實際前端網址。
+
+後續版本若修改資料表，請新增可重複追蹤的 migration SQL，並先在本機 D1 驗證，再執行遠端 D1 指令。不要直接覆蓋既有資料庫。
 
 ## 可用腳本
 
@@ -161,6 +190,7 @@ http://localhost:8787
 | `DELETE` | `/api/roles/:id` | 刪除角色 |
 | `GET` | `/api/permissions` | 取得權限列表 |
 | `GET` | `/api/articles` | 取得已發布文章 / 作品列表（支持分頁） |
+| `GET` | `/api/articles/all` | 後台取得全部文章 / 作品（包含草稿，需要 `articles:write`） |
 | `GET` | `/api/articles/:slug` | 依 slug 取得文章內容 |
 | `POST` | `/api/articles` | 建立文章 / 作品 |
 | `PUT` | `/api/articles/:id` | 更新文章 / 作品 |
@@ -196,4 +226,6 @@ http://localhost:8787
 - 此專案只負責後端 API，不處理前端渲染。
 - CORS 依 `ALLOWED_ORIGINS` 白名單限制來源。
 - 不要將 `.dev.vars` 或實際機密提交至版本控制。
+- `npm run deploy` 只部署 Worker，不會自動執行 D1 schema 或 seed。
+- `GET /api/articles/all` 是後台端點，需帶 Bearer Token 並具備 `articles:write` 權限。
 

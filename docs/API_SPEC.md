@@ -115,6 +115,7 @@ Authorization: Bearer <token>
 | DELETE | `/api/roles/:id` | Yes | `roles:delete` | 刪除角色 |
 | GET | `/api/permissions` | Yes | `permissions:read` | 取得權限列表 |
 | GET | `/api/articles` | No | No | 取得已發布文章列表（支持分頁與發布時間區間篩選） |
+| GET | `/api/articles/all` | Yes | `articles:write` | 後台取得文章列表，可包含草稿 |
 | GET | `/api/articles/:slug` | No | No | 根據 slug 取得單篇文章 |
 | POST | `/api/articles` | Yes | `articles:write` | 新增文章 |
 | PUT | `/api/articles/:id` | Yes | `articles:write` | 更新文章 |
@@ -240,12 +241,14 @@ Authorization: Bearer <token>
 }
 ```
 
+注意：request 的 `is_published` 可使用 boolean，service 會轉成 SQLite 的 `0/1`；response 實際回傳通常是 `0/1`。`published_at`、`created_at` 與 `updated_at` 會依 SQLite/D1 回傳 datetime 字串，前端不要假設一定帶有 `T` 與 `Z`。
+
 ### 6.7 Pagination & Aggregations
 
 ```json
 {
   "pagination": {
-    "total": 50,
+    "totalFiltered": 50,
     "limit": 10,
     "offset": 0,
     "page": 1,
@@ -274,13 +277,15 @@ Authorization: Bearer <token>
 
 欄位說明：
 
-- `total`: 符合條件的總記錄數
+- `totalFiltered`: 符合目前所有篩選條件的總記錄數
 - `limit`: 本次請求的每頁記錄數
 - `offset`: 資料庫 OFFSET 值
 - `page`: 當前頁碼
 - `totalPages`: 總頁數
-- `aggregations.categories`: 符合當前篩選條件下，所有分類 (type) 的聚合統計（`name` 為分類名稱，`count` 為文章數量）
-- `aggregations.tags`: 符合當前篩選條件下，所有標籤的聚合統計（`name` 為標籤名稱，`count` 為文章數量）
+- `aggregations.totalCategories`: 套用發布狀態與時間條件後的文章總數，並非分類數量
+- `aggregations.totalTags`: 套用發布狀態、時間與 type 條件後的標籤資料列總數，並非去重後標籤數量
+- `aggregations.categories`: 套用發布狀態與時間條件的分類聚合；不受 `type`、`tag` 篩選影響，且會保留已發布資料曾出現的分類並補 `count: 0`
+- `aggregations.tags`: 套用發布狀態、時間與 `type` 條件的標籤聚合；不受 `tag` 篩選影響，不補 `count: 0`
 
 ## 7. A. 健康檢查
 
@@ -808,9 +813,10 @@ Query Parameters:
 - `pageSize`: 可選，每頁文章數，預設 `10`，最多 `100`
 - `type`: 可選，文章類型過濾 (例如：`blog`, `project`)
 - `tag`: 可選，標籤名稱過濾 (例如：`Frontend`, `Vue.js`)
-- `is_published`: 可選，是否發布狀態過濾（`1` = 已發布，`0` = 草稿），預設 `1`
 - `startTime`: 可選，發布時間下限（含），ISO 8601 格式，例如 `2026-01-01T00:00:00Z`
 - `endTime`: 可選，發布時間上限（含），ISO 8601 格式，例如 `2026-12-31T23:59:59Z`
+
+公開端點的 `is_published` 固定為 `1`，不接受呼叫端覆寫，因此不會回傳草稿或未發布文章。其他 query 參數採寬鬆解析：`type` 沒有固定值域，`tag` 是 JSON 字串的 `LIKE` 比對而非精確標籤比對；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
 
 範例：
 - `GET /api/articles?page=1&pageSize=10&type=blog&tag=Vue.js`
@@ -836,7 +842,7 @@ Query Parameters:
       }
     ],
     "pagination": {
-      "total": 50,
+      "totalFiltered": 50,
       "limit": 10,
       "offset": 0,
       "page": 1,
@@ -878,6 +884,14 @@ Query Parameters:
 
 - `400 BAD_REQUEST`: `startTime` 或 `endTime` 格式無效（非 ISO 8601 格式），或 `startTime` 晚於 `endTime`
 - `500 INTERNAL_ERROR`: 伺服器內部錯誤
+
+### 12.1.1 GET /api/articles/all
+
+後台取得文章列表，可查詢已發布文章與草稿。
+
+- 認證：必須帶 Bearer Token
+- 權限：`articles:write`
+- Query：支援 `GET /api/articles` 的分頁、類型、標籤與時間參數，另可使用 `is_published=0` 查詢草稿；省略時預設為 `1`
 
 ### 12.2 GET /api/articles/:slug
 
@@ -1006,7 +1020,7 @@ Request body：
 }
 ```
 
-欄位說明：所有欄位皆可選，只更新傳入的欄位。
+欄位說明：目前實作要求送出完整文章 payload。缺少的選填欄位會被寫成 `NULL`，缺少 `is_published` 會被視為 `false`；`slug`、`title`、`type`、`content` 應一併提供，否則可能造成資料庫錯誤。
 
 成功回應 `200 OK`：
 
@@ -1029,6 +1043,7 @@ Request body：
 - `401 UNAUTHORIZED`: 未提供 Token
 - `403 FORBIDDEN`: 無 `articles:write` 權限
 - `404 NOT_FOUND`: 找不到該文章
+- `500 INTERNAL_ERROR`: 更新重複的 `slug` 目前可能落入此錯誤，尚未轉成 `409 CONFLICT`
 - `500 INTERNAL_ERROR`: 伺服器錯誤
 
 ### 12.5 DELETE /api/articles/:id
@@ -1199,6 +1214,10 @@ Authorization: Bearer <JWT_TOKEN>
 
 - `401 UNAUTHORIZED`: 未提供 Token / Token 無效 / Token 過期 / 帳號不存在
 - `403 FORBIDDEN`: 帳號已停用
+
+## 附錄：歷史版補充說明
+
+以下內容是早期文件保留的補充範例，與前方章節重複。若欄位、狀態碼或行為描述不一致，請以前方端點總表、文章章節與目前 `src/` 實作為準；維護新內容時請更新前方章節，不要在此附錄新增契約。
 
 ### 6.3 Resume
 

@@ -3,7 +3,7 @@ import { Context } from 'hono';
 import type { AppEnv } from '../../types';
 import { logger } from '../../utils/logger';
 import { fail, ok } from '../../utils/response';
-import { getPublishedArticlesService,
+import { getArticlesService,
 getArticleBySlugService,
 createArticleService,
 updateArticleService,
@@ -16,9 +16,72 @@ type ArticlePayload
  */
 export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
   try {
+    const queryResult = getQuery(c);
+    
+    // 透過 Type Guard 提早攔截錯誤，TypeScript 就再也不會報錯了
+    if (queryResult.error) {
+      return queryResult.error;
+    }
+    const query = queryResult.data!;
+    
+    // 強制設置已發布
+    query.published = 1;
+
+    const db = c.env.DB;
+    const result = await getArticlesService(
+      db,
+      query.type,
+      query.tag,
+      query.published,
+      query.pageSize,
+      query.offset,
+      query.startTime,
+      query.endTime
+    );
+    
+    return ok(c, { data: result });
+  } catch (error: any) {
+    logger.error('getPublishedArticlesController', error);
+    return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
+  }
+};
+
+/**
+ * 後台取得所有文章列表 (需權限)
+ */
+export const getAllArticlesController = async (c: Context<AppEnv>) => {
+  try {
+    const queryResult = getQuery(c);
+    if (queryResult.error) {
+      return queryResult.error;
+    }
+    const query = queryResult.data!;
+    
+    const db = c.env.DB;
+    
+    const result = await getArticlesService(
+      db,
+      query.type,
+      query.tag,
+      query.published, 
+      query.pageSize,
+      query.offset,
+      query.startTime,
+      query.endTime
+    );
+    
+    return ok(c, { data: result });
+  } catch (error: any) {
+    logger.error('getAllArticlesController', error);
+    return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
+  }
+};
+
+const getQuery = (c: Context<AppEnv>) => {
+  try {
     const type = c.req.query('type');
     const tag = c.req.query('tag');
-    
+
     // 解析 is_published 參數（是否發布，預設 1 已發布）
     const publishedQuery = c.req.query('is_published');
     const published = publishedQuery ? parseInt(publishedQuery, 10) : 1;
@@ -34,31 +97,29 @@ export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
     const startTime = c.req.query('startTime');
     const endTime = c.req.query('endTime');
     if ((startTime && Number.isNaN(Date.parse(startTime))) || (endTime && Number.isNaN(Date.parse(endTime)))) {
-      return fail(c, 400, 'BAD_REQUEST', 'startTime 與 endTime 必須為有效的 ISO 8601 時間');
+      return { error: fail(c, 400, 'BAD_REQUEST', 'startTime 與 endTime 必須為有效的 ISO 8601 時間')};
     }
     if (startTime && endTime && new Date(startTime) > new Date(endTime)) {
-      return fail(c, 400, 'BAD_REQUEST', 'startTime 不可晚於 endTime');
+      return { error:fail(c, 400, 'BAD_REQUEST', 'startTime 不可晚於 endTime')};
     }
     
     // 計算 offset
     const offset = (page - 1) * pageSize;
 
-    const db = c.env.DB;
-    const result = await getPublishedArticlesService(
-      db,
-      type,
-      tag,
-      published,
-      pageSize,
-      offset,
-      startTime,
-      endTime
-    );
-    
-    return ok(c, { data: result });
+    return {
+      data: {
+        type,
+        tag,
+        published,
+        pageSize,
+        offset,
+        startTime,
+        endTime
+      }
+    };
   } catch (error: any) {
-    logger.error('getPublishedArticlesController', error);
-    return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
+    logger.error('getQuery', error);
+    return { error: fail(c, 500, 'INTERNAL_ERROR', '參數解析發生錯誤') };
   }
 };
 

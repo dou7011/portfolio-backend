@@ -20,7 +20,7 @@ export interface ArticlePayload {
  * @param offset 分頁偏移量（預設 0）
  * @returns 包含文章列表、總數和分頁資訊的物件
  */
-export const getPublishedArticlesService = async (
+export const getArticlesService = async (
   db: D1Database,
   type?: string,
   tag?: string,

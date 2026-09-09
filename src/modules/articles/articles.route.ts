@@ -4,6 +4,7 @@ import { authGuard } from '../../middleware/authGuard'
 import { permissionGuard } from '../../middleware/permissionGuard'
 import { PERMISSIONS } from '../../constants/permissions'
 import { getPublishedArticlesController,
+  getAllArticlesController,
   getArticleBySlugController,
   createArticleController,
   updateArticleController,
@@ -18,6 +19,13 @@ articlesRoute.get('/', getPublishedArticlesController);
 // 透過 slug 取得單篇文章詳細內容，為公開端點。
 articlesRoute.get('/:slug', getArticleBySlugController);
 
+// 後台取得所有文章列表，需先通過身份驗證與權限檢查。
+articlesRoute.get(
+  '/all',
+  authGuard,
+  permissionGuard(PERMISSIONS.ARTICLE_WRITE),
+  getAllArticlesController
+);
 
 // 新增文章內容，需先通過身份驗證與權限檢查。
 articlesRoute.post(
