@@ -189,7 +189,7 @@ npm run deploy
 | `PUT` | `/api/roles/:id` | 更新角色 |
 | `DELETE` | `/api/roles/:id` | 刪除角色 |
 | `GET` | `/api/permissions` | 取得權限列表 |
-| `GET` | `/api/articles` | 取得文章 / 作品列表；具 `articles:write` 可包含草稿（支持分頁） |
+| `GET` | `/api/articles` | 取得文章 / 作品列表；`is_published` 省略時預設為 `1`，具 `articles:write` 可查詢 `0`/`1`（支持分頁） |
 | `GET` | `/api/articles/:slug` | 依 slug 取得文章內容；具 `articles:write` 可讀草稿 |
 | `POST` | `/api/articles` | 建立文章 / 作品 |
 | `PUT` | `/api/articles/:id` | 更新文章 / 作品 |
@@ -226,5 +226,5 @@ npm run deploy
 - CORS 依 `ALLOWED_ORIGINS` 白名單限制來源。
 - 不要將 `.dev.vars` 或實際機密提交至版本控制。
 - `npm run deploy` 只部署 Worker，不會自動執行 D1 schema 或 seed。
-- `GET /api/articles` 與 `GET /api/articles/:slug` 對外公開已發布內容；帶有效 Bearer Token 且具備 `articles:write` 權限時，可查詢草稿。
+- `GET /api/articles` 與 `GET /api/articles/:slug` 對外公開已發布內容；帶有效 Bearer Token 且具備 `articles:write` 權限時，可查詢草稿。文章列表的 `is_published` 可使用 `0`、`1`、`false`、`true`，省略時預設為 `1`；無此權限時固定為 `1`。
 

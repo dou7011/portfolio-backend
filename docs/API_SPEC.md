@@ -803,8 +803,8 @@ Request body:
 
 取得文章列表，支持分頁、類型、標籤、發布狀態與發布時間區間過濾，並回傳聚合標籤統計（支援動態反灰/計數）。
 
-- 認證: 無
-- 權限: 無
+- 認證: 可選；帶有效 Bearer Token 時會依使用者權限決定是否可查詢草稿
+- 權限: `articles:write`（可選）
 
 Query Parameters:
 
@@ -812,13 +812,15 @@ Query Parameters:
 - `pageSize`: 可選，每頁文章數，預設 `10`，最多 `100`
 - `type`: 可選，文章類型過濾 (例如：`blog`, `project`)
 - `tag`: 可選，標籤名稱過濾 (例如：`Frontend`, `Vue.js`)
+- `is_published`: 可選，發布狀態，可使用 `0`、`1`、`false`、`true`（也就是對應的字串 `'0'`、`'1'`、`'false'`、`'true'`）
 - `startTime`: 可選，發布時間下限（含），ISO 8601 格式，例如 `2026-01-01T00:00:00Z`
 - `endTime`: 可選，發布時間上限（含），ISO 8601 格式，例如 `2026-12-31T23:59:59Z`
 
-未登入或沒有 `articles:write` 權限時，`is_published` 固定為 `1`；具備權限時可使用 `is_published=0` 查詢草稿、`is_published=1` 查詢已發布，省略時查詢全部。其他 query 參數採寬鬆解析：`type` 沒有固定值域，`tag` 是 JSON 字串的 `LIKE` 比對而非精確標籤比對；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
+未登入或沒有 `articles:write` 權限時，`is_published` 固定為 `1`；具備權限時可使用 `is_published=0` 查詢草稿或 `is_published=1` 查詢已發布，省略時預設為 `1`。`true` 等同於 `1`，`false` 等同於 `0`；傳入其他值會回傳 `400 BAD_REQUEST`。其他 query 參數採寬鬆解析：`type` 沒有固定值域，`tag` 是 JSON 字串的 `LIKE` 比對而非精確標籤比對；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
 
 範例：
 - `GET /api/articles?page=1&pageSize=10&type=blog&tag=Vue.js`
+- `GET /api/articles?is_published=false`（需具備 `articles:write` 才能查詢草稿）
 - `GET /api/articles?startTime=2026-01-01T00:00:00Z&endTime=2026-12-31T23:59:59Z`
 
 成功回應 `200 OK`：

@@ -24,9 +24,23 @@ export const getArticlesController = async (c: Context<AppEnv>) => {
     const type = c.req.query('type');
     const tag = c.req.query('tag');
 
-    // 判斷是否需要過濾已發布的文章，若使用者無查看草稿的權限，則預設只顯示已發布的文章
-    const publishedQuery = !canViewDrafts ? '1' : c.req.query('is_published');
-    const published = publishedQuery !== undefined ? parseInt(publishedQuery, 10) : 1;
+    // 無查看草稿權限時強制只查詢已發布文章；有權限時仍預設只查詢已發布文章。
+    const publishedQuery = c.req.query('is_published');
+    let published = 1;
+    if (canViewDrafts && publishedQuery !== undefined) {
+      const publishedValues: Record<string, number> = {
+        '0': 0,
+        '1': 1,
+        false: 0,
+        true: 1
+      };
+      const normalizedPublished = publishedValues[publishedQuery];
+
+      if (normalizedPublished === undefined) {
+        return fail(c, 400, 'BAD_REQUEST', 'is_published 必須為 0、1、false 或 true');
+      }
+      published = normalizedPublished;
+    }
 
     // 解析 pageSize 參數（每頁文章數，預設 10，最多 100）
     const pageSizeQuery = c.req.query('pageSize');
@@ -39,10 +53,10 @@ export const getArticlesController = async (c: Context<AppEnv>) => {
     const startTime = c.req.query('startTime');
     const endTime = c.req.query('endTime');
     if ((startTime && Number.isNaN(Date.parse(startTime))) || (endTime && Number.isNaN(Date.parse(endTime)))) {
-      return { error: fail(c, 400, 'BAD_REQUEST', 'startTime 與 endTime 必須為有效的 ISO 8601 時間')};
+      return fail(c, 400, 'BAD_REQUEST', 'startTime 與 endTime 必須為有效的 ISO 8601 時間');
     }
     if (startTime && endTime && new Date(startTime) > new Date(endTime)) {
-      return { error:fail(c, 400, 'BAD_REQUEST', 'startTime 不可晚於 endTime')};
+      return fail(c, 400, 'BAD_REQUEST', 'startTime 不可晚於 endTime');
     }
     
     // 計算 offset
