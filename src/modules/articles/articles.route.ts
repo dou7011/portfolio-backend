@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../../types';
-import { authGuard } from '../../middleware/authGuard'
+import { authGuard, optionalAuthGuard } from '../../middleware/authGuard'
 import { permissionGuard } from '../../middleware/permissionGuard'
 import { PERMISSIONS } from '../../constants/permissions'
-import { getPublishedArticlesController,
-  getAllArticlesController,
+import { getArticlesController,
   getArticleBySlugController,
   createArticleController,
   updateArticleController,
@@ -14,20 +13,11 @@ import { getPublishedArticlesController,
 // 加上 AppEnv 泛型，確保與主程式型別一致
 const articlesRoute = new Hono<AppEnv>();
 
-// 取得已發布的文章列表，為公開端點。
-articlesRoute.get('/', getPublishedArticlesController);
+// 公開使用者只能取得已發布文章；具 articles:write 權限者可依參數查詢發布狀態。
+articlesRoute.get('/', optionalAuthGuard, getArticlesController);
 
-// 後台取得所有文章列表，需先通過身份驗證與權限檢查。
-// 注意：必須註冊在 '/:slug' 之前，否則 'all' 會被當成 slug 匹配。
-articlesRoute.get(
-  '/all',
-  authGuard,
-  permissionGuard(PERMISSIONS.ARTICLE_WRITE),
-  getAllArticlesController
-);
-
-// 透過 slug 取得單篇文章詳細內容，為公開端點。
-articlesRoute.get('/:slug', getArticleBySlugController);
+// 公開使用者只能取得已發布文章；具 articles:write 權限者可取得草稿。
+articlesRoute.get('/:slug', optionalAuthGuard, getArticleBySlugController);
 
 // 新增文章內容，需先通過身份驗證與權限檢查。
 articlesRoute.post(

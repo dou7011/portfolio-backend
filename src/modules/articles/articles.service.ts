@@ -177,11 +177,15 @@ export const getArticlesService = async (
 /**
  * 根據 slug 取得單篇文章詳細內容
  */
-export const getArticleBySlugService = async (db: D1Database, slug: string) => {
+export const getArticleBySlugService = async (
+  db: D1Database,
+  slug: string,
+  canViewDrafts = false
+) => {
   const query = `
     SELECT * 
     FROM articles 
-    WHERE slug = ? AND is_published = 1
+    WHERE slug = ?${canViewDrafts ? '' : ' AND is_published = 1'}
   `;
   const result = await db.prepare(query).bind(slug).first();
 

@@ -1,6 +1,7 @@
 // 文章模組的控制器，負責處理文章相關的 HTTP 請求，並呼叫對應的服務層邏輯。
 import { Context } from 'hono';
 import type { AppEnv } from '../../types';
+import { PERMISSIONS } from '../../constants/permissions';
 import { logger } from '../../utils/logger';
 import { fail, ok } from '../../utils/response';
 import { getArticlesService,
@@ -14,7 +15,7 @@ type ArticlePayload
 /**
  * 取得已發布的文章/作品列表，支持分頁
  */
-export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
+export const getArticlesController = async (c: Context<AppEnv>) => {
   try {
     const queryResult = getQuery(c);
     
@@ -24,8 +25,11 @@ export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
     }
     const query = queryResult.data!;
     
-    // 強制設置已發布
-    query.published = 1;
+    const user = c.get('user');
+    const canViewDrafts = user?.permissions.includes(PERMISSIONS.ARTICLE_WRITE) ?? false;
+    if (!canViewDrafts) {
+      query.published = 1;
+    }
 
     const db = c.env.DB;
     const result = await getArticlesService(
@@ -41,38 +45,7 @@ export const getPublishedArticlesController = async (c: Context<AppEnv>) => {
     
     return ok(c, { data: result });
   } catch (error: any) {
-    logger.error('getPublishedArticlesController', error);
-    return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
-  }
-};
-
-/**
- * 後台取得所有文章列表 (需權限)
- */
-export const getAllArticlesController = async (c: Context<AppEnv>) => {
-  try {
-    const queryResult = getQuery(c);
-    if (queryResult.error) {
-      return queryResult.error;
-    }
-    const query = queryResult.data!;
-    
-    const db = c.env.DB;
-    
-    const result = await getArticlesService(
-      db,
-      query.type,
-      query.tag,
-      query.published, 
-      query.pageSize,
-      query.offset,
-      query.startTime,
-      query.endTime
-    );
-    
-    return ok(c, { data: result });
-  } catch (error: any) {
-    logger.error('getAllArticlesController', error);
+    logger.error('getArticlesController', error);
     return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
   }
 };
@@ -135,7 +108,9 @@ export const getArticleBySlugController = async (c: Context<AppEnv>) => {
     }
     const db = c.env.DB;
 
-    const article = await getArticleBySlugService(db, slug);
+    const user = c.get('user');
+    const canViewDrafts = user?.permissions.includes(PERMISSIONS.ARTICLE_WRITE) ?? false;
+    const article = await getArticleBySlugService(db, slug, canViewDrafts);
     
     if (!article) {
       return fail(c, 404, 'NOT_FOUND', '找不到該文章或專案');

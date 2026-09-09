@@ -4,8 +4,7 @@ import type { AppEnv } from '../types'
 import { fail } from '../utils/response'
 import { safeJsonParse } from '../utils/safeJsonParse'
 
-// JWT 驗證中介層，負責檢查請求是否帶有有效的 Bearer token，並載入使用者角色與權限。
-export const authGuard = async (c: Context<AppEnv>, next: Next) => {
+const authenticateUser = async (c: Context<AppEnv>) => {
   const authHeader = c.req.header('Authorization')
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return fail(c, 401, 'UNAUTHORIZED', '未提供授權憑證')
@@ -57,9 +56,31 @@ export const authGuard = async (c: Context<AppEnv>, next: Next) => {
       roles,
       permissions,
     })
-
-    await next()
+    return null
   } catch {
     return fail(c, 401, 'UNAUTHORIZED', '憑證無效或已過期')
   }
+}
+
+// JWT 驗證中介層，負責檢查請求是否帶有有效的 Bearer token，並載入使用者角色與權限。
+export const authGuard = async (c: Context<AppEnv>, next: Next) => {
+  const errorResponse = await authenticateUser(c)
+  if (errorResponse) return errorResponse
+  await next()
+}
+
+// 可選的 JWT 驗證：公開請求可繼續，合法使用者仍會載入角色與權限。
+export const optionalAuthGuard = async (c: Context<AppEnv>, next: Next) => {
+  if (!c.req.header('Authorization')) {
+    await next()
+    return
+  }
+
+  const errorResponse = await authenticateUser(c)
+  if (errorResponse) {
+    await next()
+    return
+  }
+
+  await next()
 }

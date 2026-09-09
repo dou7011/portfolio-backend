@@ -114,9 +114,8 @@ Authorization: Bearer <token>
 | PUT | `/api/roles/:id` | Yes | `roles:write` | 更新角色 |
 | DELETE | `/api/roles/:id` | Yes | `roles:delete` | 刪除角色 |
 | GET | `/api/permissions` | Yes | `permissions:read` | 取得權限列表 |
-| GET | `/api/articles` | No | No | 取得已發布文章列表（支持分頁與發布時間區間篩選） |
-| GET | `/api/articles/all` | Yes | `articles:write` | 後台取得文章列表，可包含草稿 |
-| GET | `/api/articles/:slug` | No | No | 根據 slug 取得單篇文章 |
+| GET | `/api/articles` | Optional | `articles:write`（可選） | 取得文章列表；無權限時僅回傳已發布文章 |
+| GET | `/api/articles/:slug` | Optional | `articles:write`（可選） | 根據 slug 取得單篇文章；無權限時僅回傳已發布文章 |
 | POST | `/api/articles` | Yes | `articles:write` | 新增文章 |
 | PUT | `/api/articles/:id` | Yes | `articles:write` | 更新文章 |
 | DELETE | `/api/articles/:id` | Yes | `articles:delete` | 刪除文章 |
@@ -291,8 +290,8 @@ Authorization: Bearer <token>
 
 ### GET /
 
-- 認證: 無
-- 權限: 無
+- 認證：可選 Bearer Token
+- 權限：具 `articles:write` 可取得草稿；未登入或無此權限時僅能取得已發布文章
 
 成功回應：
 
@@ -304,8 +303,8 @@ Portfolio Backend 運作正常！
 
 ### 8.1 POST /api/auth/login
 
-- 認證: 無
-- 權限: 無
+- 認證：可選 Bearer Token
+- 權限：具 `articles:write` 可使用 `is_published=0` 或 `1`；未登入或無此權限時固定為 `1`
 
 Request body:
 
@@ -816,7 +815,7 @@ Query Parameters:
 - `startTime`: 可選，發布時間下限（含），ISO 8601 格式，例如 `2026-01-01T00:00:00Z`
 - `endTime`: 可選，發布時間上限（含），ISO 8601 格式，例如 `2026-12-31T23:59:59Z`
 
-公開端點的 `is_published` 固定為 `1`，不接受呼叫端覆寫，因此不會回傳草稿或未發布文章。其他 query 參數採寬鬆解析：`type` 沒有固定值域，`tag` 是 JSON 字串的 `LIKE` 比對而非精確標籤比對；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
+未登入或沒有 `articles:write` 權限時，`is_published` 固定為 `1`；具備權限時可使用 `is_published=0` 查詢草稿、`is_published=1` 查詢已發布，省略時查詢全部。其他 query 參數採寬鬆解析：`type` 沒有固定值域，`tag` 是 JSON 字串的 `LIKE` 比對而非精確標籤比對；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
 
 範例：
 - `GET /api/articles?page=1&pageSize=10&type=blog&tag=Vue.js`
@@ -884,14 +883,6 @@ Query Parameters:
 
 - `400 BAD_REQUEST`: `startTime` 或 `endTime` 格式無效（非 ISO 8601 格式），或 `startTime` 晚於 `endTime`
 - `500 INTERNAL_ERROR`: 伺服器內部錯誤
-
-### 12.1.1 GET /api/articles/all
-
-後台取得文章列表，可查詢已發布文章與草稿。
-
-- 認證：必須帶 Bearer Token
-- 權限：`articles:write`
-- Query：支援 `GET /api/articles` 的分頁、類型、標籤與時間參數，另可使用 `is_published=0` 查詢草稿；省略時預設為 `1`
 
 ### 12.2 GET /api/articles/:slug
 
