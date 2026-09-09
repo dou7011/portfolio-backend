@@ -24,7 +24,7 @@ export const getArticlesService = async (
   db: D1Database,
   type?: string,
   tag?: string,
-  isPublished: number = 1,
+  isPublished?: number,
   limit: number = 10,
   offset: number = 0,
   startTime?: string,
@@ -32,19 +32,29 @@ export const getArticlesService = async (
 ) => {
   // ==========================================
   // 1. 三層獨立的 WHERE 條件
+  // isPublished 未指定時（後台「全部」），不套用 is_published 篩選
   // ==========================================
 
   // [層級 1] 分類統計：僅受 Date 影響
-  let categoryWhereClause = `WHERE articles.is_published = ?`;
-  const categoryParams: (string | number)[] = [isPublished];
+  let categoryWhereClause = `WHERE 1=1`;
+  const categoryParams: (string | number)[] = [];
 
   // [層級 2] 標籤統計：受 Date, Type 影響
-  let tagsWhereClause = `WHERE articles.is_published = ?`;
-  const tagsParams: (string | number)[] = [isPublished];
+  let tagsWhereClause = `WHERE 1=1`;
+  const tagsParams: (string | number)[] = [];
 
   // [層級 3] 實際結果：受 Date, Type, Tag 所有條件影響
-  let whereClause = `WHERE articles.is_published = ?`;
-  const params: (string | number)[] = [isPublished];
+  let whereClause = `WHERE 1=1`;
+  const params: (string | number)[] = [];
+
+  if (isPublished !== undefined) {
+    categoryWhereClause += ` AND articles.is_published = ?`;
+    categoryParams.push(isPublished);
+    tagsWhereClause += ` AND articles.is_published = ?`;
+    tagsParams.push(isPublished);
+    whereClause += ` AND articles.is_published = ?`;
+    params.push(isPublished);
+  }
 
   // --- 處理 Date (影響所有人) ---
   if (startTime) {

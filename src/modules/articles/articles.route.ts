@@ -16,16 +16,18 @@ const articlesRoute = new Hono<AppEnv>();
 
 // 取得已發布的文章列表，為公開端點。
 articlesRoute.get('/', getPublishedArticlesController);
-// 透過 slug 取得單篇文章詳細內容，為公開端點。
-articlesRoute.get('/:slug', getArticleBySlugController);
 
 // 後台取得所有文章列表，需先通過身份驗證與權限檢查。
+// 注意：必須註冊在 '/:slug' 之前，否則 'all' 會被當成 slug 匹配。
 articlesRoute.get(
   '/all',
   authGuard,
   permissionGuard(PERMISSIONS.ARTICLE_WRITE),
   getAllArticlesController
 );
+
+// 透過 slug 取得單篇文章詳細內容，為公開端點。
+articlesRoute.get('/:slug', getArticleBySlugController);
 
 // 新增文章內容，需先通過身份驗證與權限檢查。
 articlesRoute.post(

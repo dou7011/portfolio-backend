@@ -82,9 +82,9 @@ const getQuery = (c: Context<AppEnv>) => {
     const type = c.req.query('type');
     const tag = c.req.query('tag');
 
-    // 解析 is_published 參數（是否發布，預設 1 已發布）
+    // 解析 is_published 參數（是否發布）；未帶入時交由呼叫端（公開/後台端點）決定預設值
     const publishedQuery = c.req.query('is_published');
-    const published = publishedQuery ? parseInt(publishedQuery, 10) : 1;
+    const published = publishedQuery !== undefined ? parseInt(publishedQuery, 10) : undefined;
 
     // 解析 pageSize 參數（每頁文章數，預設 10，最多 100）
     const pageSizeQuery = c.req.query('pageSize');
