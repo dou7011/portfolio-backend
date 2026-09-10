@@ -171,7 +171,7 @@ export const getArticleBySlugService = async (
              SELECT json_group_array(t.name)
              FROM article_tags at
              JOIN tags t ON at.tag_id = t.id
-             WHERE at.article_id = a.id
+             WHERE at.article_id = a.id 
            ), '[]') as tags
     FROM articles a
     WHERE a.slug = ?${canViewDrafts ? '' : ' AND a.is_published = 1'}
