@@ -5,10 +5,11 @@ import { PERMISSIONS } from '../../constants/permissions';
 import { logger } from '../../utils/logger';
 import { fail, ok } from '../../utils/response';
 import { getArticlesService,
-getArticleBySlugService,
-createArticleService,
-updateArticleService,
-deleteArticleService,
+  getArticleBySlugService,
+  createArticleService,
+  updateArticleService,
+  deleteArticleService,
+  invalidateArticleMetadataCache,
 type ArticlePayload
 } from './articles.service';
 
@@ -63,7 +64,7 @@ export const getArticlesController = async (c: Context<AppEnv>) => {
     const offset = (page - 1) * pageSize;
 
     const db = c.env.DB;
-    const result = await getArticlesService( db, type, tag, published, pageSize, offset, startTime, endTime );
+    const result = await getArticlesService( db, type, tag, published, pageSize, offset, startTime, endTime, c );
     
     return ok(c, { data: result });
   } catch (error: any) {
@@ -113,6 +114,7 @@ export const createArticleController = async (c: Context<AppEnv>) => {
 
     const db = c.env.DB;
     const newArticle = await createArticleService(db, body);
+    await invalidateArticleMetadataCache();
     
     return ok(c, { message: '文章建立成功', data: newArticle });
   } catch (error: any) {
@@ -142,6 +144,8 @@ export const updateArticleController = async (c: Context<AppEnv>) => {
       return fail(c, 404, 'NOT_FOUND', '找不到該文章');
     }
 
+    await invalidateArticleMetadataCache();
+
     return ok(c, { message: '文章更新成功', data: updatedArticle });
   } catch (error: any) {
     logger.error('updateArticleController', error);
@@ -167,6 +171,8 @@ export const deleteArticleController = async (c: Context<AppEnv>) => {
     if (!deletedRecord) {
       return fail(c, 404, 'NOT_FOUND', '找不到該文章，可能已被刪除');
     }
+
+    await invalidateArticleMetadataCache();
 
     return ok(c, { message: '文章已成功刪除' });
   } catch (error: any) {
