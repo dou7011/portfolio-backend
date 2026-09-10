@@ -816,7 +816,7 @@ Query Parameters:
 - `startTime`: 可選，發布時間下限（含），ISO 8601 格式，例如 `2026-01-01T00:00:00Z`
 - `endTime`: 可選，發布時間上限（含），ISO 8601 格式，例如 `2026-12-31T23:59:59Z`
 
-未登入或沒有 `articles:write` 權限時，`is_published` 固定為 `1`；具備權限時可使用 `is_published=0` 查詢草稿或 `is_published=1` 查詢已發布，省略時預設為 `1`。`true` 等同於 `1`，`false` 等同於 `0`；傳入其他值會回傳 `400 BAD_REQUEST`。其他 query 參數採寬鬆解析：`type` 沒有固定值域，`tag` 是 JSON 字串的 `LIKE` 比對而非精確標籤比對；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
+未登入或沒有 `articles:write` 權限時，`is_published` 固定為 `1`；具備權限時可使用 `is_published=0` 查詢草稿或 `is_published=1` 查詢已發布，省略時預設為 `1`。`true` 等同於 `1`，`false` 等同於 `0`；傳入其他值會回傳 `400 BAD_REQUEST`。其他 query 參數採寬鬆解析：`type` 沒有固定值域；`tag` 透過 `article_tags`/`tags` 關聯表精確比對標籤名稱（區分大小寫，非 LIKE 模糊比對）；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
 
 範例：
 - `GET /api/articles?page=1&pageSize=10&type=blog&tag=Vue.js`
@@ -850,6 +850,8 @@ Query Parameters:
       "totalPages": 5
     },
     "aggregations": {
+      "totalCategories": 50,
+      "totalTags": 78,
       "categories": [
         {
           "name": "blog",
@@ -857,17 +859,13 @@ Query Parameters:
         },
         {
           "name": "portfolio",
-          "count": 2
+          "count": 0
         }
       ],
       "tags": [
         {
           "name": "Frontend",
           "count": 5
-        },
-        {
-          "name": "Azure",
-          "count": 0
         }
       ]
     }
@@ -877,9 +875,11 @@ Query Parameters:
 
 回應欄位說明：
 - `data`: 符合條件的文章列表陣列
-- `pagination`: 分頁資訊（包含 `total`, `limit`, `offset`, `page`, `totalPages`）
-- `aggregations.categories`: 所有已存在的文章分類於當前篩選條件下的數量統計列表。
-- `aggregations.tags`: 所有已存在的標籤於當前篩選條件下的文章數量統計列表。若數量為 `0` 可用於前端介面的動態反灰顯示。
+- `pagination`: 分頁資訊（包含 `totalFiltered`, `limit`, `offset`, `page`, `totalPages`）
+- `aggregations.totalCategories`: 套用發布狀態與時間條件後的文章總數，並非分類數量
+- `aggregations.totalTags`: 套用發布狀態、時間與 `type` 條件後的標籤資料列總數，並非去重後標籤數量
+- `aggregations.categories`: 套用發布狀態與時間條件的分類聚合；不受 `type`、`tag` 篩選影響，且會保留已發布資料曾出現過的分類並補 `count: 0`
+- `aggregations.tags`: 套用發布狀態、時間與 `type` 條件的標籤聚合；不受 `tag` 篩選影響；僅回傳至少有一篇符合條件文章的標籤，不會補 `count: 0`
 
 可能錯誤：
 

@@ -71,7 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
 -- 部落格與作品集 (Articles & Portfolio)
 -- ==========================================
 
--- 文章表
+-- 文章表 (移除原本的 tags TEXT 欄位)
 CREATE TABLE IF NOT EXISTS articles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slug VARCHAR(100) NOT NULL UNIQUE,        -- 網址友善的英文識別碼，例如 'it-auth-service'
@@ -80,7 +80,6 @@ CREATE TABLE IF NOT EXISTS articles (
     cover_image VARCHAR(255),                 -- 封面圖 URL
     excerpt TEXT,                             -- 簡短摘要 (列表頁顯示用)
     content TEXT NOT NULL,                    -- Markdown 格式的正文
-    tags TEXT,                                -- 技術標籤 (存 JSON 字串，例如 '["TypeScript", "Vue.js"]')
     github_url VARCHAR(255),                  -- GitHub 原始碼連結 (選填)
     demo_url VARCHAR(255),                    -- 實際運作的網站連結 (選填)
     view_count INTEGER DEFAULT 0,             -- 瀏覽次數 (可用於熱門文章排序)
@@ -90,7 +89,29 @@ CREATE TABLE IF NOT EXISTS articles (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 獨立標籤表
+CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 文章與標籤關聯表 (樞紐表)
+CREATE TABLE IF NOT EXISTS article_tags (
+    article_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY (article_id, tag_id),
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
 -- 建立索引加速查詢
 CREATE INDEX idx_articles_slug ON articles(slug);
 CREATE INDEX idx_articles_type ON articles(type);
 CREATE INDEX idx_articles_published ON articles(is_published);
+CREATE INDEX idx_articles_published_at ON articles(published_at DESC);
+CREATE INDEX idx_articles_published_type ON articles(is_published, type);
+
+-- 關聯表專用索引
+CREATE INDEX idx_article_tags_article_id ON article_tags(article_id);
+CREATE INDEX idx_article_tags_tag_id ON article_tags(tag_id);

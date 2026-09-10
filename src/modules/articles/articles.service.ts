@@ -11,14 +11,8 @@ export interface ArticlePayload {
   is_published?: boolean;
 }
 
-
 /**
- * 取得已發布的文章/作品列表，支持分頁、類型過濾
- * @param db D1Database 實例
- * @param type 文章類型過濾（可選）
- * @param limit 一頁的文章數量（預設 10）
- * @param offset 分頁偏移量（預設 0）
- * @returns 包含文章列表、總數和分頁資訊的物件
+ * 取得已發布的文章/作品列表，支持分頁、類型過濾 (已最佳化 D1 Row Reads)
  */
 export const getArticlesService = async (
   db: D1Database,
@@ -30,131 +24,120 @@ export const getArticlesService = async (
   startTime?: string,
   endTime?: string
 ) => {
-  // ==========================================
-  // 1. 三層獨立的 WHERE 條件
-  // isPublished 未指定時（後台「全部」），不套用 is_published 篩選
-  // ==========================================
-
-  // [層級 1] 分類統計：僅受 Date 影響
-  let categoryWhereClause = `WHERE 1=1`;
-  const categoryParams: (string | number)[] = [];
-
-  // [層級 2] 標籤統計：受 Date, Type 影響
-  let tagsWhereClause = `WHERE 1=1`;
-  const tagsParams: (string | number)[] = [];
-
-  // [層級 3] 實際結果：受 Date, Type, Tag 所有條件影響
-  let whereClause = `WHERE 1=1`;
-  const params: (string | number)[] = [];
+  let baseWhere = `WHERE 1=1`;
+  const baseParams: (string | number)[] = [];
 
   if (isPublished !== undefined) {
-    categoryWhereClause += ` AND articles.is_published = ?`;
-    categoryParams.push(isPublished);
-    tagsWhereClause += ` AND articles.is_published = ?`;
-    tagsParams.push(isPublished);
-    whereClause += ` AND articles.is_published = ?`;
-    params.push(isPublished);
+    baseWhere += ` AND a.is_published = ?`;
+    baseParams.push(isPublished);
   }
-
-  // --- 處理 Date (影響所有人) ---
   if (startTime) {
-    categoryWhereClause += ` AND articles.published_at >= ?`;
-    categoryParams.push(startTime);
-    tagsWhereClause += ` AND articles.published_at >= ?`;
-    tagsParams.push(startTime);
-    whereClause += ` AND articles.published_at >= ?`;
-    params.push(startTime);
+    baseWhere += ` AND a.published_at >= ?`;
+    baseParams.push(startTime);
   }
-
   if (endTime) {
-    categoryWhereClause += ` AND articles.published_at <= ?`;
-    categoryParams.push(endTime);
-    tagsWhereClause += ` AND articles.published_at <= ?`;
-    tagsParams.push(endTime);
-    whereClause += ` AND articles.published_at <= ?`;
-    params.push(endTime);
+    baseWhere += ` AND a.published_at <= ?`;
+    baseParams.push(endTime);
   }
 
-  // --- 處理 Type (影響 Tags, Articles) ---
+  // [層級 1] 分類統計條件
+  const categoryWhere = baseWhere;
+  const categoryParams = [...baseParams];
+
+  // [層級 2] 標籤統計條件
+  let tagsWhere = baseWhere;
+  const tagsParams = [...baseParams];
   if (type) {
-    tagsWhereClause += ` AND articles.type = ?`;
+    tagsWhere += ` AND a.type = ?`;
     tagsParams.push(type);
-    whereClause += ` AND articles.type = ?`;
-    params.push(type);
   }
 
-  // --- 處理 Tag (僅影響 Articles) ---
+  // [層級 3] 實際文章結果條件
+  let articlesWhere = tagsWhere;
+  const articlesParams = [...tagsParams];
   if (tag) {
-    whereClause += ` AND articles.tags LIKE ?`;
-    params.push(`%${tag}%`);
+    articlesWhere += ` AND EXISTS (
+      SELECT 1 FROM article_tags at 
+      JOIN tags t ON at.tag_id = t.id 
+      WHERE at.article_id = a.id AND t.name = ?
+    )`;
+    articlesParams.push(tag);
   }
 
   const safeLimit = Math.max(1, Math.min(limit, 100));
   const safeOffset = Math.max(0, offset);
 
-  // ==========================================
-  // 2. 構建並行 SQL 查詢
-  // ==========================================
+  // 1. 分頁總數
+  const filteredTotalQuery = `SELECT COUNT(*) as count FROM articles a ${articlesWhere}`;
 
-  // 各自的總數量
-  const categoriesTotalQuery = `SELECT COUNT(*) as count FROM articles ${categoryWhereClause}`;
-  const tagsTotalQuery = `SELECT COUNT(*) as count FROM articles ${tagsWhereClause}`;
-  const filteredTotalQuery = `SELECT COUNT(*) as count FROM articles ${whereClause}`;
-
+  // 2. 取得文章與其包含的標籤 (使用 json_group_array 直接回傳 JSON 字串陣列)
   const articlesQuery = `
-    SELECT id, slug, title, type, cover_image, excerpt, tags, view_count, is_published, published_at 
-    FROM articles 
-    ${whereClause}
-    ORDER BY published_at DESC
+    SELECT a.id, a.slug, a.title, a.type, a.cover_image, a.excerpt, a.view_count, a.is_published, a.published_at,
+           COALESCE((
+             SELECT json_group_array(t.name)
+             FROM article_tags at
+             JOIN tags t ON at.tag_id = t.id
+             WHERE at.article_id = a.id
+           ), '[]') as tags
+    FROM articles a
+    ${articlesWhere}
+    ORDER BY a.published_at DESC
     LIMIT ? OFFSET ?
   `;
 
-  // 分類聚合 (保留 LEFT JOIN：讓日期區間內沒有文章的分類顯示 0，不消失)
+  // 3. 分類統計聚合
   const categoryAggregationsQuery = `
     WITH AllTypes AS (
-      SELECT DISTINCT type AS category_name FROM articles WHERE is_published = 1 AND type IS NOT NULL
+      SELECT DISTINCT type AS name FROM articles WHERE type IS NOT NULL
     ),
     FilteredTypes AS (
-      SELECT type AS category_name, COUNT(id) AS count FROM articles
-      ${categoryWhereClause}
+      SELECT type AS name, COUNT(id) AS count FROM articles a
+      ${categoryWhere}
       GROUP BY type
     )
-    SELECT AllTypes.category_name as name, COALESCE(FilteredTypes.count, 0) AS count
+    SELECT AllTypes.name, COALESCE(FilteredTypes.count, 0) AS count
     FROM AllTypes
-    LEFT JOIN FilteredTypes ON AllTypes.category_name = FilteredTypes.category_name
-    ORDER BY count DESC, name ASC;
+    LEFT JOIN FilteredTypes ON AllTypes.name = FilteredTypes.name
+    ORDER BY count DESC, AllTypes.name ASC;
   `;
 
-  // 標籤聚合 (極簡化：完全依照目前的 Type 與 Date 動態生成標籤，不補 0)
+  // 4. 標籤統計聚合 (透過關聯表 JOIN)
   const tagsAggregationsQuery = `
-    SELECT value AS name, COUNT(articles.id) AS count
-    FROM articles, json_each(articles.tags)
-    ${tagsWhereClause} AND articles.tags IS NOT NULL
-    GROUP BY value
-    ORDER BY count DESC, name ASC;
+    SELECT t.name, COUNT(at.article_id) AS count
+    FROM tags t
+    JOIN article_tags at ON t.id = at.tag_id
+    JOIN articles a ON at.article_id = a.id
+    ${tagsWhere}
+    GROUP BY t.id
+    ORDER BY count DESC, t.name ASC;
   `;
 
   const [
-    categoriesTotalResult,
-    tagsTotalResult,
     filteredTotalResult,
     articlesResult,
     categoryAggResult,
     tagsAggResult
   ] = await Promise.all([
-    db.prepare(categoriesTotalQuery).bind(...categoryParams).first(),
-    db.prepare(tagsTotalQuery).bind(...tagsParams).first(),
-    db.prepare(filteredTotalQuery).bind(...params).first(),
-    db.prepare(articlesQuery).bind(...params, safeLimit, safeOffset).all(),
+    db.prepare(filteredTotalQuery).bind(...articlesParams).first(),
+    db.prepare(articlesQuery).bind(...articlesParams, safeLimit, safeOffset).all(),
     db.prepare(categoryAggregationsQuery).bind(...categoryParams).all(),
     db.prepare(tagsAggregationsQuery).bind(...tagsParams).all()
   ]);
 
   const totalFiltered = (filteredTotalResult as any)?.count || 0;
-  const articles = articlesResult.results.map(row => ({
-    ...row,
-    tags: row.tags ? JSON.parse(row.tags as string) : []
-  }));
+  
+  // 處理 tags 欄位，如果 SQLite 查無標籤會回傳 '[null]'，過濾掉該情況
+  const articles = articlesResult.results.map(row => {
+    let parsedTags: string[] = [];
+    if (row.tags) {
+        parsedTags = JSON.parse(row.tags as string);
+        if (parsedTags.length === 1 && parsedTags[0] === null) parsedTags = [];
+    }
+    return { ...row, tags: parsedTags };
+  });
+
+  const totalCategories = categoryAggResult.results.reduce((sum, row) => sum + Number((row as any).count), 0);
+  const totalTags = tagsAggResult.results.reduce((sum, row) => sum + Number((row as any).count), 0);
 
   return {
     data: articles,
@@ -166,8 +149,8 @@ export const getArticlesService = async (
       totalPages: Math.ceil(totalFiltered / safeLimit) || 1
     },
     aggregations: {
-      totalCategories: (categoriesTotalResult as any)?.count || 0,
-      totalTags: (tagsTotalResult as any)?.count || 0,             
+      totalCategories,
+      totalTags,             
       categories: categoryAggResult.results,
       tags: tagsAggResult.results 
     }
@@ -183,17 +166,52 @@ export const getArticleBySlugService = async (
   canViewDrafts = false
 ) => {
   const query = `
-    SELECT * 
-    FROM articles 
-    WHERE slug = ?${canViewDrafts ? '' : ' AND is_published = 1'}
+    SELECT a.*,
+           COALESCE((
+             SELECT json_group_array(t.name)
+             FROM article_tags at
+             JOIN tags t ON at.tag_id = t.id
+             WHERE at.article_id = a.id
+           ), '[]') as tags
+    FROM articles a
+    WHERE a.slug = ?${canViewDrafts ? '' : ' AND a.is_published = 1'}
   `;
   const result = await db.prepare(query).bind(slug).first();
 
   if (result) {
-    result.tags = result.tags ? JSON.parse(result.tags as string) : [];
+    let parsedTags = JSON.parse(result.tags as string);
+    if (parsedTags.length === 1 && parsedTags[0] === null) parsedTags = [];
+    result.tags = parsedTags;
   }
   
   return result;
+};
+
+/**
+ * 共用函式：同步文章標籤
+ */
+const syncArticleTags = async (db: D1Database, articleId: number | string, tags: string[]) => {
+  if (!tags || tags.length === 0) return;
+
+  // 1. 確保標籤存在於 tags 表 (INSERT OR IGNORE)
+  const insertTagsStmts = tags.map(tag => 
+    db.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`).bind(tag)
+  );
+  if (insertTagsStmts.length > 0) {
+    await db.batch(insertTagsStmts);
+  }
+
+  // 2. 取得這些標籤的 IDs
+  const placeholders = tags.map(() => '?').join(',');
+  const { results: tagRows } = await db.prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`).bind(...tags).all();
+
+  // 3. 綁定關聯至 article_tags 表
+  const insertArticleTagsStmts = tagRows.map(row => 
+    db.prepare(`INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?)`).bind(articleId, row.id)
+  );
+  if (insertArticleTagsStmts.length > 0) {
+    await db.batch(insertArticleTagsStmts);
+  }
 };
 
 /**
@@ -201,24 +219,29 @@ export const getArticleBySlugService = async (
  */
 export const createArticleService = async (db: D1Database, payload: ArticlePayload) => {
   const query = `
-    INSERT INTO articles (slug, title, type, cover_image, excerpt, content, tags, github_url, demo_url, is_published, published_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO articles (slug, title, type, cover_image, excerpt, content, github_url, demo_url, is_published, published_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *;
   `;
   
-  const tagsStr = payload.tags ? JSON.stringify(payload.tags) : null;
   const isPublished = payload.is_published ? 1 : 0;
-  // 如果設定為發布，就押上當前時間；否則為 null
   const publishedAt = isPublished ? new Date().toISOString() : null;
 
-  const result = await db.prepare(query).bind(
+  // 1. 寫入文章
+  const article = await db.prepare(query).bind(
     payload.slug, payload.title, payload.type, payload.cover_image || null,
-    payload.excerpt || null, payload.content, tagsStr, 
+    payload.excerpt || null, payload.content, 
     payload.github_url || null, payload.demo_url || null, 
     isPublished, publishedAt
   ).first();
 
-  return result;
+  // 2. 寫入標籤並建立關聯
+  if (article && payload.tags && payload.tags.length > 0) {
+    await syncArticleTags(db, article.id as number, payload.tags);
+  }
+
+  // 將傳入的 tags 補回結果中方便前端顯示
+  return { ...article, tags: payload.tags || [] };
 };
 
 /**
@@ -228,7 +251,7 @@ export const updateArticleService = async (db: D1Database, id: string, payload: 
   const query = `
     UPDATE articles 
     SET slug = ?, title = ?, type = ?, cover_image = ?, excerpt = ?, content = ?, 
-        tags = ?, github_url = ?, demo_url = ?, is_published = ?,
+        github_url = ?, demo_url = ?, is_published = ?,
         published_at = CASE 
             WHEN ? = 1 AND published_at IS NULL THEN CURRENT_TIMESTAMP
             WHEN ? = 0 THEN NULL
@@ -239,33 +262,44 @@ export const updateArticleService = async (db: D1Database, id: string, payload: 
     RETURNING *;
   `;
   
-  const tagsStr = payload.tags ? JSON.stringify(payload.tags) : null;
   const isPublished = payload.is_published ? 1 : 0;
 
-  const result = await db.prepare(query).bind(
+  // 1. 更新文章
+  const article = await db.prepare(query).bind(
     payload.slug, payload.title, payload.type, payload.cover_image || null,
-    payload.excerpt || null, payload.content, tagsStr, 
+    payload.excerpt || null, payload.content, 
     payload.github_url || null, payload.demo_url || null, 
     isPublished, 
-    isPublished, // 供 CASE WHEN 的第一個條件判斷使用
-    isPublished, // 供 CASE WHEN 的第二個條件判斷使用
+    isPublished, 
+    isPublished, 
     id
   ).first();
 
-  return result;
+  // 2. 更新標籤關聯
+  if (article) {
+    // 先清空該文章的所有舊標籤關聯
+    await db.prepare(`DELETE FROM article_tags WHERE article_id = ?`).bind(id).run();
+    // 重新建立標籤關聯
+    if (payload.tags && payload.tags.length > 0) {
+      await syncArticleTags(db, id, payload.tags);
+    }
+  }
+
+  return { ...article, tags: payload.tags || [] };
 };
 
 /**
  * 移除文章
  */
 export const deleteArticleService = async (db: D1Database, id: string) => {
+  // 因 schema.sql 中 article_tags 表設定了 ON DELETE CASCADE，
+  // 刪除 articles 資料會自動連帶清除對應的 article_tags，不需額外處理。
   const query = `
     DELETE FROM articles 
     WHERE id = ?
     RETURNING id;
   `;
   
-  // 執行刪除並回傳被刪除的 id
   const result = await db.prepare(query).bind(id).first();
   return result;
 };
