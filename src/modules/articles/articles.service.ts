@@ -118,8 +118,8 @@ const getCachedAggregations = async (
   const articlesParams = [...tagsParams];
   if (tag) {
     articlesWhere += ` AND EXISTS (
-      SELECT 1 FROM article_tags at
-      JOIN tags t ON at.tag_id = t.id
+      SELECT 1 FROM article_tags at 
+      JOIN tags t ON at.tag_id = t.id 
       WHERE at.article_id = a.id AND t.name = ?
     )`;
     articlesParams.push(tag);
@@ -127,14 +127,14 @@ const getCachedAggregations = async (
 
   // 4. 執行昂貴的資料庫統計查詢
   const filteredTotalQuery = `SELECT COUNT(*) as count FROM articles a ${articlesWhere}`;
-
+  
   const categoryAggregationsQuery = `
     SELECT type AS name, COUNT(id) AS count FROM articles a
     ${categoryWhere}
     GROUP BY type
     ORDER BY count DESC, name ASC;
   `;
-
+  
   const tagsAggregationsQuery = `
     SELECT t.name, COUNT(at.article_id) AS count
     FROM tags t
@@ -155,7 +155,7 @@ const getCachedAggregations = async (
   const totalCategories = categoryAggResult.results.reduce((sum, row) => sum + Number((row as any).count), 0);
   const totalTags = tagsAggResult.results.reduce((sum, row) => sum + Number((row as any).count), 0);
 
-  const metaData: AggregationMetaData = {
+  const metaData: AggregationMetaData = { 
     totalFiltered,
     aggregations: {
       totalCategories,
@@ -165,14 +165,14 @@ const getCachedAggregations = async (
     }
   };
 
-  // 5. 將結果寫入快取 (設定 900 秒 TTL)，並推到背景執行
+  // 5. 將結果寫入快取 (設定 300 秒 TTL)，並推到背景執行
   const responseToCache = new Response(JSON.stringify(metaData), {
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': `s-maxage=${META_CACHE_TTL_SECONDS}`
     }
   });
-
+  
   if (c?.executionCtx) {
     c.executionCtx.waitUntil(cache.put(cacheRequest, responseToCache));
   } else {
@@ -183,7 +183,7 @@ const getCachedAggregations = async (
 };
 
 /**
- * 取得已發布的文章/作品列表，支援分頁與類型過濾 (已最佳化 D1 Row Reads)
+ * 取得已發布的文章/作品列表，支持分頁、類型過濾 (已最佳化 D1 Row Reads)
  */
 export const getArticlesService = async (
   db: D1Database,
@@ -199,7 +199,7 @@ export const getArticlesService = async (
   // 1. 組裝「文章列表」專用的條件
   let articlesWhere = `WHERE 1=1`;
   const articlesParams: (string | number)[] = [];
-
+  
   if (isPublished !== undefined) {
     articlesWhere += ` AND a.is_published = ?`;
     articlesParams.push(isPublished);
@@ -219,8 +219,8 @@ export const getArticlesService = async (
   }
   if (tag) {
     articlesWhere += ` AND EXISTS (
-      SELECT 1 FROM article_tags at
-      JOIN tags t ON at.tag_id = t.id
+      SELECT 1 FROM article_tags at 
+      JOIN tags t ON at.tag_id = t.id 
       WHERE at.article_id = a.id AND t.name = ?
     )`;
     articlesParams.push(tag);
@@ -243,7 +243,7 @@ export const getArticlesService = async (
     ORDER BY a.published_at DESC
     LIMIT ? OFFSET ?
   `;
-
+  
   const articlesResult = await db.prepare(articlesQuery).bind(...articlesParams, safeLimit, safeOffset).all();
   const articles = articlesResult.results.map(row => {
     let parsedTags: string[] = [];
@@ -263,7 +263,7 @@ export const getArticlesService = async (
   return {
     data: articles,
     pagination: {
-      totalFiltered: metaData.totalFiltered,
+      totalFiltered: metaData.totalFiltered,   
       limit: safeLimit,
       offset: safeOffset,
       page: Math.floor(safeOffset / safeLimit) + 1,
@@ -287,7 +287,7 @@ export const getArticleBySlugService = async (
              SELECT json_group_array(t.name)
              FROM article_tags at
              JOIN tags t ON at.tag_id = t.id
-             WHERE at.article_id = a.id
+             WHERE at.article_id = a.id 
            ), '[]') as tags
     FROM articles a
     WHERE a.slug = ?${canViewDrafts ? '' : ' AND a.is_published = 1'}
@@ -299,7 +299,7 @@ export const getArticleBySlugService = async (
     if (parsedTags.length === 1 && parsedTags[0] === null) parsedTags = [];
     result.tags = parsedTags;
   }
-
+  
   return result;
 };
 
@@ -310,7 +310,7 @@ const syncArticleTags = async (db: D1Database, articleId: number | string, tags:
   if (!tags || tags.length === 0) return;
 
   // 1. 確保標籤存在於 tags 表 (INSERT OR IGNORE)
-  const insertTagsStmts = tags.map(tag =>
+  const insertTagsStmts = tags.map(tag => 
     db.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`).bind(tag)
   );
   if (insertTagsStmts.length > 0) {
@@ -322,7 +322,7 @@ const syncArticleTags = async (db: D1Database, articleId: number | string, tags:
   const { results: tagRows } = await db.prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`).bind(...tags).all();
 
   // 3. 綁定關聯至 article_tags 表
-  const insertArticleTagsStmts = tagRows.map(row =>
+  const insertArticleTagsStmts = tagRows.map(row => 
     db.prepare(`INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?)`).bind(articleId, row.id)
   );
   if (insertArticleTagsStmts.length > 0) {
@@ -339,15 +339,15 @@ export const createArticleService = async (db: D1Database, payload: ArticlePaylo
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *;
   `;
-
+  
   const isPublished = payload.is_published ? 1 : 0;
   const publishedAt = isPublished ? new Date().toISOString() : null;
 
   // 1. 寫入文章
   const article = await db.prepare(query).bind(
     payload.slug, payload.title, payload.type, payload.cover_image || null,
-    payload.excerpt || null, payload.content,
-    payload.github_url || null, payload.demo_url || null,
+    payload.excerpt || null, payload.content, 
+    payload.github_url || null, payload.demo_url || null, 
     isPublished, publishedAt
   ).first();
 
@@ -365,29 +365,29 @@ export const createArticleService = async (db: D1Database, payload: ArticlePaylo
  */
 export const updateArticleService = async (db: D1Database, id: string, payload: ArticlePayload) => {
   const query = `
-    UPDATE articles
-    SET slug = ?, title = ?, type = ?, cover_image = ?, excerpt = ?, content = ?,
+    UPDATE articles 
+    SET slug = ?, title = ?, type = ?, cover_image = ?, excerpt = ?, content = ?, 
         github_url = ?, demo_url = ?, is_published = ?,
-        published_at = CASE
+        published_at = CASE 
             WHEN ? = 1 AND published_at IS NULL THEN CURRENT_TIMESTAMP
             WHEN ? = 0 THEN NULL
-            ELSE published_at
+            ELSE published_at 
         END,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
     RETURNING *;
   `;
-
+  
   const isPublished = payload.is_published ? 1 : 0;
 
   // 1. 更新文章
   const article = await db.prepare(query).bind(
     payload.slug, payload.title, payload.type, payload.cover_image || null,
-    payload.excerpt || null, payload.content,
-    payload.github_url || null, payload.demo_url || null,
-    isPublished,
-    isPublished,
-    isPublished,
+    payload.excerpt || null, payload.content, 
+    payload.github_url || null, payload.demo_url || null, 
+    isPublished, 
+    isPublished, 
+    isPublished, 
     id
   ).first();
 
@@ -411,11 +411,11 @@ export const deleteArticleService = async (db: D1Database, id: string) => {
   // 因 schema.sql 中 article_tags 表設定了 ON DELETE CASCADE，
   // 刪除 articles 資料會自動連帶清除對應的 article_tags，不需額外處理。
   const query = `
-    DELETE FROM articles
+    DELETE FROM articles 
     WHERE id = ?
     RETURNING id;
   `;
-
+  
   const result = await db.prepare(query).bind(id).first();
   return result;
 };
