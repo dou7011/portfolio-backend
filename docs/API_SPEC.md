@@ -283,15 +283,15 @@ Authorization: Bearer <token>
 - `totalPages`: 總頁數
 - `aggregations.totalCategories`: 套用發布狀態與時間條件後的文章總數，並非分類數量
 - `aggregations.totalTags`: 套用發布狀態、時間與 type 條件後的標籤資料列總數，並非去重後標籤數量
-- `aggregations.categories`: 套用發布狀態與時間條件的分類聚合；不受 `type`、`tag` 篩選影響，且會保留已發布資料曾出現的分類並補 `count: 0`
+- `aggregations.categories`: 套用發布狀態與時間條件的分類聚合；不受 `type`、`tag` 篩選影響；僅回傳至少有一篇符合條件文章的分類，不會補 `count: 0`
 - `aggregations.tags`: 套用發布狀態、時間與 `type` 條件的標籤聚合；不受 `tag` 篩選影響，不補 `count: 0`
 
 ## 7. A. 健康檢查
 
 ### GET /
 
-- 認證：可選 Bearer Token
-- 權限：具 `articles:write` 可取得草稿；未登入或無此權限時僅能取得已發布文章
+- 認證：無
+- 權限：無
 
 成功回應：
 
@@ -303,8 +303,8 @@ Portfolio Backend 運作正常！
 
 ### 8.1 POST /api/auth/login
 
-- 認證：可選 Bearer Token
-- 權限：具 `articles:write` 可使用 `is_published=0` 或 `1`；未登入或無此權限時固定為 `1`
+- 認證：無
+- 權限：無
 
 Request body:
 
@@ -801,7 +801,7 @@ Request body:
 
 ### 12.1 GET /api/articles
 
-取得文章列表，支持分頁、類型、標籤、發布狀態與發布時間區間過濾，並回傳聚合標籤統計（支援動態反灰/計數）。
+取得文章列表，支持分頁、類型、標籤、發布狀態與發布時間區間過濾，並回傳分類與標籤聚合統計。
 
 - 認證: 可選；帶有效 Bearer Token 時會依使用者權限決定是否可查詢草稿
 - 權限: `articles:write`（可選）
@@ -839,6 +839,7 @@ Query Parameters:
         "excerpt": "Article summary...",
         "tags": ["Frontend", "Vue.js"],
         "view_count": 100,
+        "is_published": 1,
         "published_at": "2026-01-01T00:00:00Z"
       }
     ],
@@ -856,10 +857,6 @@ Query Parameters:
         {
           "name": "blog",
           "count": 3
-        },
-        {
-          "name": "portfolio",
-          "count": 0
         }
       ],
       "tags": [
@@ -878,7 +875,7 @@ Query Parameters:
 - `pagination`: 分頁資訊（包含 `totalFiltered`, `limit`, `offset`, `page`, `totalPages`）
 - `aggregations.totalCategories`: 套用發布狀態與時間條件後的文章總數，並非分類數量
 - `aggregations.totalTags`: 套用發布狀態、時間與 `type` 條件後的標籤資料列總數，並非去重後標籤數量
-- `aggregations.categories`: 套用發布狀態與時間條件的分類聚合；不受 `type`、`tag` 篩選影響，且會保留已發布資料曾出現過的分類並補 `count: 0`
+- `aggregations.categories`: 套用發布狀態與時間條件的分類聚合；不受 `type`、`tag` 篩選影響；僅回傳至少有一篇符合條件文章的分類，不會補 `count: 0`
 - `aggregations.tags`: 套用發布狀態、時間與 `type` 條件的標籤聚合；不受 `tag` 篩選影響；僅回傳至少有一篇符合條件文章的標籤，不會補 `count: 0`
 
 可能錯誤：
@@ -890,8 +887,10 @@ Query Parameters:
 
 根據 slug 取得單篇文章詳細內容。
 
-- 認證: 無
-- 權限: 無
+- 認證: 可選；帶有效 Bearer Token 時會依使用者權限決定是否可查詢草稿
+- 權限: `articles:write`（可選），用於查看未發布文章
+
+未登入或沒有 `articles:write` 權限時，只能取得 `is_published=1` 的文章；具備 `articles:write` 權限時，可取得同 slug 的草稿文章。
 
 Path Params:
 
@@ -1015,6 +1014,8 @@ Request body：
 
 欄位說明：目前實作要求送出完整文章 payload。缺少的選填欄位會被寫成 `NULL`，缺少 `is_published` 會被視為 `false`；`slug`、`title`、`type`、`content` 應一併提供，否則可能造成資料庫錯誤。
 
+更新成功時會回傳完整的文章資料；SQLite 的布林欄位實際以 `0` 或 `1` 回傳，`tags` 會回傳陣列。
+
 成功回應 `200 OK`：
 
 ```json
@@ -1025,6 +1026,16 @@ Request body：
     "id": "1",
     "slug": "updated-article",
     "title": "Updated Article",
+    "type": "article",
+    "cover_image": null,
+    "excerpt": null,
+    "content": "Updated content...",
+    "github_url": null,
+    "demo_url": null,
+    "tags": [],
+    "is_published": 1,
+    "published_at": "2026-01-01T12:00:00Z",
+    "created_at": "2026-01-01T00:00:00Z",
     "updated_at": "2026-01-01T12:00:00Z"
   }
 }

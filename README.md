@@ -189,7 +189,7 @@ npm run deploy
 | `PUT` | `/api/roles/:id` | 更新角色 |
 | `DELETE` | `/api/roles/:id` | 刪除角色 |
 | `GET` | `/api/permissions` | 取得權限列表 |
-| `GET` | `/api/articles` | 取得文章 / 作品列表；`is_published` 省略時預設為 `1`，具 `articles:write` 可查詢 `0`/`1`（支持分頁） |
+| `GET` | `/api/articles` | 取得文章 / 作品列表；`is_published` 省略時預設為 `1`，具 `articles:write` 可查詢 `0`、`1`、`false`、`true`（支持分頁） |
 | `GET` | `/api/articles/:slug` | 依 slug 取得文章內容；具 `articles:write` 可讀草稿 |
 | `POST` | `/api/articles` | 建立文章 / 作品 |
 | `PUT` | `/api/articles/:id` | 更新文章 / 作品 |
