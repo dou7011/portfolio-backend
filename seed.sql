@@ -37,26 +37,32 @@ INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES
 (3, 1);
 
 -- 4. 寫入個人履歷資料 (Resumes)
-INSERT OR IGNORE INTO resumes (lang, title, summary, skills, experience, education, certifications)
+INSERT OR IGNORE INTO resumes (lang, title, email, github, summary, skills, experience, education, certifications, projects)
 VALUES (
   'zh',
   '林和泰的個人履歷',
+  'dou7011@gmail.com',
+  'https://github.com/dou7011',
   '我是林和泰。過去擁有七年的機械領域經驗，因為對程式設計有極大的熱忱，我利用下班時間學習，後來決定轉換跑道進入勤益科大資訊工程系就讀。',
   '[{"category": "程式語言", "items": ["Python", "JavaScript", "TypeScript"]}, {"category": "前端技術", "items": ["HTML", "CSS", "Angular", "Vue"]}, {"category": "後端技術", "items": ["NestJS", "Flask"]}, {"category": "資料庫", "items": ["SQL Server", "MySQL", "Redis"]}, {"category": "開發與部署", "items": ["Docker"]}]',
   '[{"company": "向上國際科技股份有限公司", "title": "實習生", "startDate": "2023/09", "endDate": "2026/09", "description": "前期負責設備整備、資產管理與推行資安宣導，並學習機房、雲端服務與VM建置。後期投入全端開發。"}, {"company": "岳群機械有限公司", "title": "組立修配人員", "startDate": "2015/03", "endDate": "2022/07", "description": "負責客製化包裝機之組立與測試調校，具備機械故障排除與設備優化的實務能力。"}]',
   '[{"school": "國立勤益科技大學", "degree": "資訊工程系學士", "startDate": "2022/09", "endDate": "2026/06"}]',
-  '[{"name": "Microsoft Azure DP-100", "credentialId": "1093-1934", "description": "於 Azure 應用資料科學與機器學習技術。"}, {"name": "Microsoft Azure AZ-900", "credentialId": "H558-0163", "description": "熟悉雲端運算核心概念。"}]'
+  '[{"name": "Microsoft Azure DP-100", "credentialId": "1093-1934", "description": "於 Azure 應用資料科學與機器學習技術。"}, {"name": "Microsoft Azure AZ-900", "credentialId": "H558-0163", "description": "熟悉雲端運算核心概念。"}]',
+  '[{"name": "IT AuthService", "description": "基於 Vue.js 與 TypeScript 打造的企業級前端認證模組，實作即時權限校驗。", "techStack": ["Vue.js", "TypeScript", "NestJS", "Cloudflare D1"], "githubUrl": "https://github.com/your-account/it-auth-service", "demoUrl": ""}]'
 );
 
-INSERT OR IGNORE INTO resumes (lang, title, summary, skills, experience, education, certifications)
+INSERT OR IGNORE INTO resumes (lang, title, email, github, summary, skills, experience, education, certifications, projects)
 VALUES (
   'en',
   'Ho-Tai Lin | Resume',
+  'dou7011@gmail.com',
+  'https://github.com/dou7011',
   'My name is Ho-Tai Lin. I have seven years of experience in the mechanical field and later transitioned into software development.',
   '[{"category": "Languages", "items": ["Python", "JavaScript", "TypeScript"]}, {"category": "Frontend", "items": ["HTML", "CSS", "Angular", "Vue"]}, {"category": "Backend", "items": ["NestJS", "Flask"]}, {"category": "Databases", "items": ["SQL Server", "MySQL", "Redis"]}, {"category": "Development & Deployment", "items": ["Docker"]}]',
   '[{"company": "Xiang Shang Games Co., Ltd.", "title": "Intern", "startDate": "2023/09", "endDate": "2026/09", "description": "Contributed to full-stack development and cloud infrastructure tasks."}, {"company": "YUEH CHYUN MACHINERY CO., LTD.", "title": "Assembly and Maintenance Technician", "startDate": "2015/03", "endDate": "2022/07", "description": "Assembled and optimized customized packaging equipment."}]',
   '[{"school": "National Chin-Yi University of Technology", "degree": "Bachelor of Science in Computer Science and Information Engineering", "startDate": "2022/09", "endDate": "2026/06"}]',
-  '[{"name": "Microsoft Azure DP-100", "credentialId": "1093-1934", "description": "Designing and Implementing a Data Science Solution on Azure"}, {"name": "Microsoft Azure AZ-900", "credentialId": "H558-0163", "description": "Microsoft Azure Fundamentals"}]'
+  '[{"name": "Microsoft Azure DP-100", "credentialId": "1093-1934", "description": "Designing and Implementing a Data Science Solution on Azure"}, {"name": "Microsoft Azure AZ-900", "credentialId": "H558-0163", "description": "Microsoft Azure Fundamentals"}]',
+  '[{"name": "IT AuthService", "description": "Enterprise-grade frontend authentication module built with Vue.js and TypeScript, implementing real-time RBAC.", "techStack": ["Vue.js", "TypeScript", "NestJS", "Cloudflare D1"], "githubUrl": "https://github.com/your-account/it-auth-service", "demoUrl": ""}]'
 );
 
 -- ==========================================

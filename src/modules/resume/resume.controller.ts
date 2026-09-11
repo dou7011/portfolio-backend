@@ -32,14 +32,14 @@ export const getResumeController = async (c: Context<AppEnv>) => {
  */
 export const updateResumeController = async (c: Context<AppEnv>) => {
   const body = await c.req.json()
-  const { lang, title, summary, skills, experience, education, certifications } = body
+  const { lang, title, email, github, summary, skills, experience, education, certifications, projects } = body
 
   if (!lang || !['en', 'zh'].includes(lang)) {
     return fail(c, 400, 'BAD_REQUEST', '語言參數無效 (必須是 "en" 或 "zh")')
   }
 
   try {
-    await updateResume(c.env.DB, { lang, title, summary, skills, experience, education, certifications })
+    await updateResume(c.env.DB, { lang, title, email, github, summary, skills, experience, education, certifications, projects })
     return ok(c, { message: '履歷更新成功' })
   } catch (error: any) {
     logger.error('updateResumeController', `Error updating resume for lang: ${lang}`, error)
