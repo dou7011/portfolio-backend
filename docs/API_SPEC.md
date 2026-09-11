@@ -183,6 +183,8 @@ Authorization: Bearer <token>
   "id": 1,
   "lang": "zh",
   "title": "林和泰的個人履歷",
+  "email": "dou7011@gmail.com",
+  "github": "https://github.com/dou7011",
   "summary": "我是林和泰...",
   "skills": [
     {
@@ -214,9 +216,23 @@ Authorization: Bearer <token>
       "description": "說明"
     }
   ],
+  "projects": [
+    {
+      "name": "專案名稱",
+      "description": "專案描述",
+      "techStack": ["Vue.js", "TypeScript"],
+      "githubUrl": "https://github.com/your-account/project",
+      "demoUrl": ""
+    }
+  ],
   "updated_at": "2026-06-02 09:00:00"
 }
 ```
+
+欄位說明：
+
+- `email`、`github`：選填，用於履歷頁展示聯絡方式；未設定時為 `null` 或空字串
+- `projects`：作品集項目陣列，`techStack` 為字串陣列，`githubUrl`、`demoUrl` 選填
 
 ### 6.6 Article
 
@@ -392,11 +408,14 @@ Path params:
     "id": 1,
     "lang": "zh",
     "title": "林和泰的個人履歷",
+    "email": "dou7011@gmail.com",
+    "github": "https://github.com/dou7011",
     "summary": "我是林和泰...",
     "skills": [],
     "experience": [],
     "education": [],
     "certifications": [],
+    "projects": [],
     "updated_at": "2026-06-02 09:00:00"
   }
 }
@@ -426,6 +445,8 @@ Request body:
 {
   "lang": "zh",
   "title": "林和泰的個人履歷",
+  "email": "dou7011@gmail.com",
+  "github": "https://github.com/dou7011",
   "summary": "新的簡介",
   "skills": [
     {
@@ -455,6 +476,15 @@ Request body:
       "name": "Azure AZ-900",
       "credentialId": "ABC-123",
       "description": "Azure Fundamentals"
+    }
+  ],
+  "projects": [
+    {
+      "name": "IT AuthService",
+      "description": "基於 Vue.js 與 TypeScript 打造的企業級前端認證模組",
+      "techStack": ["Vue.js", "TypeScript", "NestJS", "Cloudflare D1"],
+      "githubUrl": "https://github.com/your-account/it-auth-service",
+      "demoUrl": ""
     }
   ]
 }
