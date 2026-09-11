@@ -49,11 +49,14 @@ CREATE TABLE IF NOT EXISTS resumes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     lang TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
+    email TEXT,
+    github TEXT,
     summary TEXT,
     skills TEXT,
     experience TEXT,
     education TEXT,
     certifications TEXT,
+    projects TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -71,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email_active ON users(email, is_active);
 -- 部落格與作品集 (Articles & Portfolio)
 -- ==========================================
 
--- 文章表 (移除原本的 tags TEXT 欄位)
+-- 文章表
 CREATE TABLE IF NOT EXISTS articles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slug VARCHAR(100) NOT NULL UNIQUE,        -- 網址友善的英文識別碼，例如 'it-auth-service'
