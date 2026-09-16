@@ -309,8 +309,15 @@ export const getArticleBySlugService = async (
 const syncArticleTags = async (db: D1Database, articleId: number | string, tags: string[]) => {
   if (!tags || tags.length === 0) return;
 
+  const normalizedTags = [...new Set(tags
+    .map(tag => String(tag).trim())
+    .filter(tag => tag.length > 0 && tag.length <= 50)
+  )];
+
+  if (normalizedTags.length === 0) return;
+
   // 1. 確保標籤存在於 tags 表 (INSERT OR IGNORE)
-  const insertTagsStmts = tags.map(tag => 
+  const insertTagsStmts = normalizedTags.map(tag => 
     db.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`).bind(tag)
   );
   if (insertTagsStmts.length > 0) {
@@ -318,12 +325,13 @@ const syncArticleTags = async (db: D1Database, articleId: number | string, tags:
   }
 
   // 2. 取得這些標籤的 IDs
-  const placeholders = tags.map(() => '?').join(',');
-  const { results: tagRows } = await db.prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`).bind(...tags).all();
+  const placeholders = normalizedTags.map(() => '?').join(',');
+  const { results: tagRows } = await db.prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`).bind(...normalizedTags).all();
 
-  // 3. 綁定關聯至 article_tags 表
-  const insertArticleTagsStmts = tagRows.map(row => 
-    db.prepare(`INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?)`).bind(articleId, row.id)
+  // 3. 綁定關聯至 article_tags 表，避免重複關聯造成 UNIQUE constraint
+  const uniqueTagIds = [...new Set(tagRows.map(row => Number(row.id)))];
+  const insertArticleTagsStmts = uniqueTagIds.map(tagId => 
+    db.prepare(`INSERT OR IGNORE INTO article_tags (article_id, tag_id) VALUES (?, ?)`).bind(articleId, tagId)
   );
   if (insertArticleTagsStmts.length > 0) {
     await db.batch(insertArticleTagsStmts);
@@ -352,12 +360,16 @@ export const createArticleService = async (db: D1Database, payload: ArticlePaylo
   ).first();
 
   // 2. 寫入標籤並建立關聯
-  if (article && payload.tags && payload.tags.length > 0) {
-    await syncArticleTags(db, article.id as number, payload.tags);
+  const normalizedTags = Array.isArray(payload.tags)
+    ? [...new Set(payload.tags.map(tag => String(tag).trim()).filter(Boolean))]
+    : [];
+
+  if (article && normalizedTags.length > 0) {
+    await syncArticleTags(db, Number(article.id), normalizedTags);
   }
 
   // 將傳入的 tags 補回結果中方便前端顯示
-  return { ...article, tags: payload.tags || [] };
+  return { ...article, tags: normalizedTags };
 };
 
 /**
@@ -379,6 +391,9 @@ export const updateArticleService = async (db: D1Database, id: string, payload: 
   `;
   
   const isPublished = payload.is_published ? 1 : 0;
+  const normalizedTags = Array.isArray(payload.tags)
+    ? [...new Set(payload.tags.map(tag => String(tag).trim()).filter(Boolean))]
+    : [];
 
   // 1. 更新文章
   const article = await db.prepare(query).bind(
@@ -391,17 +406,17 @@ export const updateArticleService = async (db: D1Database, id: string, payload: 
     id
   ).first();
 
-  // 2. 更新標籤關聯
-  if (article) {
-    // 先清空該文章的所有舊標籤關聯
-    await db.prepare(`DELETE FROM article_tags WHERE article_id = ?`).bind(id).run();
-    // 重新建立標籤關聯
-    if (payload.tags && payload.tags.length > 0) {
-      await syncArticleTags(db, id, payload.tags);
-    }
+  if (!article) {
+    return null;
   }
 
-  return { ...article, tags: payload.tags || [] };
+  // 2. 更新標籤關聯
+  await db.prepare(`DELETE FROM article_tags WHERE article_id = ?`).bind(id).run();
+  if (normalizedTags.length > 0) {
+    await syncArticleTags(db, Number(article.id), normalizedTags);
+  }
+
+  return { ...article, tags: normalizedTags };
 };
 
 /**

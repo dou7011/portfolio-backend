@@ -52,13 +52,29 @@ export const createUserService = async (db: D1Database, email: string, password:
   }
 
   const hashedPassword = await hashPassword(password)
-  const { results } = await db.prepare(
-    'INSERT INTO users (email, password_hash, is_active) VALUES (?, ?, ?) RETURNING id'
-  ).bind(email, hashedPassword, isActive).all()
+  const statements = [
+    db.prepare('INSERT INTO users (email, password_hash, is_active) VALUES (?, ?, ?) RETURNING id').bind(email, hashedPassword, isActive)
+  ]
 
-  const userId = results[0].id as number
-  if (roleIds && roleIds.length > 0) {
-    await assignUserRolesService(db, userId, roleIds)
+  if (Array.isArray(roleIds) && roleIds.length > 0) {
+    for (const roleId of roleIds) {
+      statements.push(db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').bind(0, roleId))
+    }
+  }
+
+  const results = await db.batch(statements)
+  const insertResult = results[0] as any
+  const userId = insertResult?.results?.[0]?.id as number | undefined
+
+  if (!userId) {
+    throw new Error('USER_CREATE_FAILED')
+  }
+
+  if (Array.isArray(roleIds) && roleIds.length > 0) {
+    const roleStatements = roleIds.map(roleId =>
+      db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').bind(userId, roleId)
+    )
+    await db.batch(roleStatements)
   }
 }
 
@@ -66,23 +82,39 @@ export const createUserService = async (db: D1Database, email: string, password:
  * 更新使用者基本資料（啟用狀態、密碼與角色）。
  */
 export const updateUserService = async (db: D1Database, id: string, isActive: number, password?: string, roleIds?: number[]) => {
-  if (password && password.trim() !== '') {
-    const hashedPassword = await hashPassword(password)
-    await db.prepare('UPDATE users SET is_active = ?, password_hash = ? WHERE id = ?').bind(isActive, hashedPassword, id).run()
-  } else {
-    await db.prepare('UPDATE users SET is_active = ? WHERE id = ?').bind(isActive, id).run()
+  const existing = await db.prepare('SELECT id FROM users WHERE id = ?').bind(id).first()
+  if (!existing) {
+    return null
   }
 
-  if (roleIds && Array.isArray(roleIds)) {
-    await assignUserRolesService(db, id, roleIds)
+  const statements: any[] = []
+  if (password && password.trim() !== '') {
+    const hashedPassword = await hashPassword(password)
+    statements.push(db.prepare('UPDATE users SET is_active = ?, password_hash = ? WHERE id = ?').bind(isActive, hashedPassword, id))
+  } else {
+    statements.push(db.prepare('UPDATE users SET is_active = ? WHERE id = ?').bind(isActive, id))
   }
+
+  if (Array.isArray(roleIds)) {
+    statements.push(db.prepare('DELETE FROM user_roles WHERE user_id = ?').bind(id))
+    for (const roleId of roleIds) {
+      statements.push(db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').bind(id, roleId))
+    }
+  }
+
+  if (statements.length > 0) {
+    await db.batch(statements)
+  }
+
+  return { id }
 }
 
 /**
  * 移除使用者，關聯資料由資料庫 CASCADE 清理。
  */
 export const deleteUserService = async (db: D1Database, id: string) => {
-  await db.prepare('DELETE FROM users WHERE id = ?').bind(id).run()
+  const result = await db.prepare('DELETE FROM users WHERE id = ? RETURNING id').bind(id).first()
+  return result
 }
 
 const assignUserRolesService = async (db: D1Database, userId: string | number, roleIds: number[]) => {

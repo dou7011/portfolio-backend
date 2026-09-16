@@ -12,6 +12,8 @@
     }
   ],
   "vars": {
-    "ALLOWED_ORIGINS": "http://localhost:4200,https://portfolio-frontend-4fl.pages.dev"
+    "ALLOWED_ORIGINS": "https://portfolio-frontend-4fl.pages.dev,https://hotailin.com",
+    "JWT_ISSUER": "hotailin-portfolio-backend",
+    "JWT_AUDIENCE": "hotailin-portfolio-frontend"
   }
 }

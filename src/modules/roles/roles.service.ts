@@ -46,34 +46,58 @@ export const createRoleService = async (db: D1Database, name: string, descriptio
   const existing = await db.prepare('SELECT id FROM roles WHERE name = ?').bind(name).first();
   if (existing) throw new Error('ROLE_ALREADY_EXISTS');
 
-  const { results } = await db.prepare(
-    'INSERT INTO roles (name, description) VALUES (?, ?) RETURNING id'
-  ).bind(name, description || null).all();
+  const statements: any[] = [
+    db.prepare('INSERT INTO roles (name, description) VALUES (?, ?) RETURNING id').bind(name, description || null)
+  ];
 
-  const roleId = results[0].id as number;
-
-  // 如果有額外的權限 ID，則指派給角色
-  if (permissionIds && permissionIds.length > 0) {
-    await assignRolePermissionsService(db, roleId, permissionIds);
+  if (Array.isArray(permissionIds) && permissionIds.length > 0) {
+    for (const permissionId of permissionIds) {
+      statements.push(db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').bind(0, permissionId));
+    }
   }
-  return results[0].id as number;
+
+  const results = await db.batch(statements);
+  const insertResult = results[0] as any;
+  const roleId = insertResult?.results?.[0]?.id as number | undefined;
+
+  if (roleId === undefined) {
+    throw new Error('ROLE_CREATE_FAILED');
+  }
+
+  if (Array.isArray(permissionIds) && permissionIds.length > 0) {
+    const rolePermissionStatements = permissionIds.map(permissionId =>
+      db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').bind(roleId, permissionId)
+    );
+    await db.batch(rolePermissionStatements);
+  }
+
+  return roleId;
 }
 
 /**
  * 編輯角色基本資料 (僅限：名稱與描述)
  */
 export const updateRoleService = async (db: D1Database, id: string, name: string, description?: string, permissionIds?: number[]) => {
+  const existingRole = await db.prepare('SELECT id FROM roles WHERE id = ?').bind(id).first();
+  if (!existingRole) return null;
+
   const existing = await db.prepare('SELECT id FROM roles WHERE name = ? AND id != ?').bind(name, id).first();
   if (existing) throw new Error('ROLE_ALREADY_EXISTS');
 
-  await db.prepare(
-    'UPDATE roles SET name = ?, description = ? WHERE id = ?'
-  ).bind(name, description || null, id).run();
+  const statements: any[] = [
+    db.prepare('UPDATE roles SET name = ?, description = ? WHERE id = ?').bind(name, description || null, id)
+  ];
 
-  // 如果編輯時有傳入 permissionIds，採全量覆寫（可清空）
   if (Array.isArray(permissionIds)) {
-    await assignRolePermissionsService(db, id, permissionIds);
+    statements.push(db.prepare('DELETE FROM role_permissions WHERE role_id = ?').bind(id));
+    for (const permissionId of permissionIds) {
+      statements.push(db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').bind(id, permissionId));
+    }
   }
+
+  await db.batch(statements)
+
+  return { id }
 }
 
 /**
@@ -81,7 +105,8 @@ export const updateRoleService = async (db: D1Database, id: string, name: string
  */
 export const deleteRoleService = async (db: D1Database, id: string) => {
   // 依賴 D1 的 ON DELETE CASCADE 機制，自動清空 user_roles 與 role_permissions
-  await db.prepare('DELETE FROM roles WHERE id = ?').bind(id).run();
+  const result = await db.prepare('DELETE FROM roles WHERE id = ? RETURNING id').bind(id).first();
+  return result
 }
 
 

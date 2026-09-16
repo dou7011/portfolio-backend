@@ -10,6 +10,7 @@ import {
 import type { DbBindings } from '../../types'
 import { logger } from '../../utils/logger'
 import { fail, ok, created } from '../../utils/response'
+import { parseJsonBody } from '../../utils/parseJsonBody'
 
 /**
  * 處理讀取角色列表的 HTTP 請求與回應
@@ -50,11 +51,18 @@ export const getRoleController = async (c: Context<{ Bindings: DbBindings }>) =>
  * 處理建立角色和權限指派的 HTTP 請求與回應
  */
 export const createRoleController = async (c: Context<{ Bindings: DbBindings }>) => {
-  const body = await c.req.json<{ name: string, description?: string , permissionIds?: number[] }>();
-  if (!body.name) return fail(c, 400, 'BAD_REQUEST', '角色名稱為必填');
+  const body = await parseJsonBody<{ name?: string, description?: string , permissionIds?: number[] }>(c);
+  if (!body) {
+    return fail(c, 400, 'BAD_REQUEST', '請提供有效的 JSON 請求內容');
+  }
+
+  if (typeof body.name !== 'string' || body.name.trim().length < 1 ||
+    (body.permissionIds !== undefined && (!Array.isArray(body.permissionIds) || body.permissionIds.some(id => !Number.isInteger(id) || id <= 0)))) {
+    return fail(c, 400, 'BAD_REQUEST', '角色名稱為必填，且 permissionIds 需為正整數陣列');
+  }
 
   try {
-    await createRoleService(c.env.DB, body.name, body.description, body.permissionIds);
+    await createRoleService(c.env.DB, body.name.trim(), body.description, body.permissionIds);
     return created(c, { message: '角色建立與權限指派成功！' });
   } catch (error: any) {
     logger.error('createRoleController', error);
@@ -70,11 +78,21 @@ export const updateRoleController = async (c: Context<{ Bindings: DbBindings }>)
   const roleId = c.req.param('id');
   if (!roleId) return fail(c, 400, 'BAD_REQUEST', '請提供角色 ID');
 
-  const body = await c.req.json<{ name: string, description?: string , permissionIds?: number[] }>();
-  if (!body.name) return fail(c, 400, 'BAD_REQUEST', '角色名稱為必填');
+  const body = await parseJsonBody<{ name?: string, description?: string , permissionIds?: number[] }>(c);
+  if (!body) {
+    return fail(c, 400, 'BAD_REQUEST', '請提供有效的 JSON 請求內容');
+  }
+
+  if (typeof body.name !== 'string' || body.name.trim().length < 1 ||
+    (body.permissionIds !== undefined && (!Array.isArray(body.permissionIds) || body.permissionIds.some(id => !Number.isInteger(id) || id <= 0)))) {
+    return fail(c, 400, 'BAD_REQUEST', '角色名稱為必填，且 permissionIds 需為正整數陣列');
+  }
 
   try {
-    await updateRoleService(c.env.DB, roleId, body.name, body.description, body.permissionIds);
+    const updated = await updateRoleService(c.env.DB, roleId, body.name.trim(), body.description, body.permissionIds);
+    if (!updated) {
+      return fail(c, 404, 'NOT_FOUND', '找不到對應的角色')
+    }
     return ok(c, { message: '角色更新與權限指派成功！' });
   } catch (error: any) {
     logger.error('updateRoleController', error);
@@ -91,7 +109,10 @@ export const deleteRoleController = async (c: Context<{ Bindings: DbBindings }>)
   if (!roleId) return fail(c, 400, 'BAD_REQUEST', '請提供角色 ID');
 
   try {
-    await deleteRoleService(c.env.DB, roleId);
+    const deleted = await deleteRoleService(c.env.DB, roleId);
+    if (!deleted) {
+      return fail(c, 404, 'NOT_FOUND', '找不到對應的角色');
+    }
     return ok(c, { message: '角色已成功移除！' });
   } catch (error: any) {
     logger.error('deleteRoleController', error);

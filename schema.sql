@@ -109,12 +109,10 @@ CREATE TABLE IF NOT EXISTS article_tags (
 );
 
 -- 建立索引加速查詢
-CREATE INDEX idx_articles_slug ON articles(slug);
-CREATE INDEX idx_articles_type ON articles(type);
-CREATE INDEX idx_articles_published ON articles(is_published);
-CREATE INDEX idx_articles_published_at ON articles(published_at DESC);
-CREATE INDEX idx_articles_published_type ON articles(is_published, type);
+CREATE INDEX IF NOT EXISTS idx_articles_type ON articles(type);
+CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(is_published, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_articles_published_type ON articles(is_published, type);
 
 -- 關聯表專用索引
-CREATE INDEX idx_article_tags_article_id ON article_tags(article_id);
-CREATE INDEX idx_article_tags_tag_id ON article_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_article_tags_article_id ON article_tags(article_id);
+CREATE INDEX IF NOT EXISTS idx_article_tags_tag_id ON article_tags(tag_id);

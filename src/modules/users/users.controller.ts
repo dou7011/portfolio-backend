@@ -4,6 +4,7 @@ import { getAllUsersService, getUserByIdService, createUserService, updateUserSe
 import type { DbBindings } from '../../types'
 import { logger } from '../../utils/logger'
 import { fail, ok, created } from '../../utils/response'
+import { parseJsonBody } from '../../utils/parseJsonBody'
 
 /**
  * 處理讀取使用者列表的 HTTP 請求與回應。
@@ -43,10 +44,16 @@ export const getUserController = async (c: Context<{ Bindings: DbBindings }>) =>
  * 處理建立使用者與角色指派的 HTTP 請求與回應。
  */
 export const createUserController = async (c: Context<{ Bindings: DbBindings }>) => {
-  const body = await c.req.json<{ email: string; password: string; isActive: number; roleIds?: number[] }>()
+  const body = await parseJsonBody<{ email?: string; password?: string; isActive?: number; roleIds?: number[] }>(c)
+  if (!body) {
+    return fail(c, 400, 'BAD_REQUEST', '請提供有效的 JSON 請求內容')
+  }
 
-  if (!body.email || !body.password || body.isActive === undefined) {
-    return fail(c, 400, 'BAD_REQUEST', '請提供完整的必填欄位')
+  if (typeof body.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email) ||
+    typeof body.password !== 'string' || body.password.length < 8 ||
+    typeof body.isActive !== 'number' || ![0, 1].includes(body.isActive) ||
+    (body.roleIds !== undefined && (!Array.isArray(body.roleIds) || body.roleIds.some(id => !Number.isInteger(id) || id <= 0)))) {
+    return fail(c, 400, 'BAD_REQUEST', '欄位格式錯誤：請提供有效電子郵件、至少 8 碼密碼、isActive 只能為 0 或 1，且 roleIds 需為正整數陣列')
   }
 
   try {
@@ -68,11 +75,22 @@ export const updateUserController = async (c: Context<{ Bindings: DbBindings }>)
   const userId = c.req.param('id')
   if (!userId) return fail(c, 400, 'BAD_REQUEST', '請提供使用者 ID')
 
-  const body = await c.req.json<{ isActive: number; password?: string; roleIds?: number[] }>()
-  if (body.isActive === undefined) return fail(c, 400, 'BAD_REQUEST', '請提供啟用狀態')
+  const body = await parseJsonBody<{ isActive?: number; password?: string; roleIds?: number[] }>(c)
+  if (!body) {
+    return fail(c, 400, 'BAD_REQUEST', '請提供有效的 JSON 請求內容')
+  }
+
+  if (typeof body.isActive !== 'number' || ![0, 1].includes(body.isActive) ||
+    (body.password !== undefined && (typeof body.password !== 'string' || body.password.length < 8)) ||
+    (body.roleIds !== undefined && (!Array.isArray(body.roleIds) || body.roleIds.some(id => !Number.isInteger(id) || id <= 0)))) {
+    return fail(c, 400, 'BAD_REQUEST', '欄位格式錯誤：isActive 只能為 0 或 1，密碼至少 8 碼，roleIds 需為正整數陣列')
+  }
 
   try {
-    await updateUserService(c.env.DB, userId, body.isActive, body.password, body.roleIds)
+    const updated = await updateUserService(c.env.DB, userId, body.isActive, body.password, body.roleIds)
+    if (!updated) {
+      return fail(c, 404, 'NOT_FOUND', '找不到對應的使用者')
+    }
     return ok(c, { message: '使用者與角色更新成功！' })
   } catch (error: unknown) {
     logger.error('updateUserController', error)
@@ -90,7 +108,10 @@ export const deleteUserController = async (c: Context<{ Bindings: DbBindings }>)
   }
 
   try {
-    await deleteUserService(c.env.DB, userId)
+    const deleted = await deleteUserService(c.env.DB, userId)
+    if (!deleted) {
+      return fail(c, 404, 'NOT_FOUND', '找不到對應的使用者')
+    }
     return ok(c, { message: '使用者已成功移除！' })
   } catch (error: unknown) {
     logger.error('deleteUserController', error)

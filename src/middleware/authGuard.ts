@@ -4,16 +4,38 @@ import type { AppEnv } from '../types'
 import { fail } from '../utils/response'
 import { safeJsonParse } from '../utils/safeJsonParse'
 
+const isValidJwtPayload = (payload: unknown, issuer: string, audience: string): payload is { id: number; iss: string; aud: string } => {
+  if (!payload || typeof payload !== 'object') return false
+
+  const candidate = payload as Record<string, unknown>
+  const id = candidate.id
+  const iss = candidate.iss
+  const aud = candidate.aud
+
+  return (
+    typeof iss === 'string' && iss === issuer &&
+    typeof aud === 'string' && aud === audience &&
+    typeof id === 'number' && Number.isInteger(id) && id > 0
+  )
+}
+
 const authenticateUser = async (c: Context<AppEnv>) => {
   const authHeader = c.req.header('Authorization')
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return fail(c, 401, 'UNAUTHORIZED', '未提供授權憑證')
   }
 
-  const token = authHeader.split(' ')[1]
+  const token = authHeader.slice('Bearer '.length).trim()
+  if (!token) {
+    return fail(c, 401, 'UNAUTHORIZED', 'Bearer token 不可為空')
+  }
 
   try {
-    const decodedPayload = await verify(token, c.env.JWT_SECRET, 'HS256') as { id: number }
+    const decodedPayload = await verify(token, c.env.JWT_SECRET, 'HS256')
+    if (!isValidJwtPayload(decodedPayload, c.env.JWT_ISSUER, c.env.JWT_AUDIENCE)) {
+      return fail(c, 401, 'UNAUTHORIZED', '憑證格式無效')
+    }
+
     const userId = decodedPayload.id
 
     const row = await c.env.DB.prepare(`
@@ -71,15 +93,19 @@ export const authGuard = async (c: Context<AppEnv>, next: Next) => {
 
 // 可選的 JWT 驗證：公開請求可繼續，合法使用者仍會載入角色與權限。
 export const optionalAuthGuard = async (c: Context<AppEnv>, next: Next) => {
-  if (!c.req.header('Authorization')) {
+  const authHeader = c.req.header('Authorization')
+  if (!authHeader) {
     await next()
     return
   }
 
+  if (!authHeader.startsWith('Bearer ')) {
+    return fail(c, 401, 'UNAUTHORIZED', '授權格式錯誤，請使用 Bearer token')
+  }
+
   const errorResponse = await authenticateUser(c)
   if (errorResponse) {
-    await next()
-    return
+    return errorResponse
   }
 
   await next()

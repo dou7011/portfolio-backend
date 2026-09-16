@@ -4,6 +4,7 @@ import type { AppEnv } from '../../types';
 import { PERMISSIONS } from '../../constants/permissions';
 import { logger } from '../../utils/logger';
 import { fail, ok } from '../../utils/response';
+import { parseJsonBody } from '../../utils/parseJsonBody';
 import { getArticlesService,
   getArticleBySlugService,
   createArticleService,
@@ -104,16 +105,18 @@ export const getArticleBySlugController = async (c: Context<AppEnv>) => {
  * 新增文章 (需權限)
  */
 export const createArticleController = async (c: Context<AppEnv>) => {
-  try {
-    const body = await c.req.json<ArticlePayload>();
-    
-    // 基本的防禦性驗證
-    if (!body.slug || !body.title || !body.content) {
-      return fail(c, 400, 'BAD_REQUEST', '缺少必填欄位 (slug, title, content)');
-    }
+  const body = await parseJsonBody<Partial<ArticlePayload>>(c);
+  if (!body) {
+    return fail(c, 400, 'BAD_REQUEST', '請提供有效的 JSON 請求內容');
+  }
 
+  if (!isValidArticlePayload(body)) {
+    return fail(c, 400, 'BAD_REQUEST', '文章欄位格式或長度不正確');
+  }
+
+  try {
     const db = c.env.DB;
-    const newArticle = await createArticleService(db, body);
+    const newArticle = await createArticleService(db, body as ArticlePayload);
     await invalidateArticleMetadataCache();
     
     return ok(c, { message: '文章建立成功', data: newArticle });
@@ -135,10 +138,17 @@ export const updateArticleController = async (c: Context<AppEnv>) => {
     const id = c.req.param('id');
     if (!id) return fail(c, 400, 'BAD_REQUEST', '缺少要更新的文章 ID');
 
-    const body = await c.req.json<ArticlePayload>();
+    const body = await parseJsonBody<Partial<ArticlePayload>>(c);
+    if (!body) {
+      return fail(c, 400, 'BAD_REQUEST', '請提供有效的 JSON 請求內容');
+    }
+
+    if (!isValidArticlePayload(body)) {
+      return fail(c, 400, 'BAD_REQUEST', '文章欄位格式或長度不正確');
+    }
+
     const db = c.env.DB;
-    
-    const updatedArticle = await updateArticleService(db, id, body);
+    const updatedArticle = await updateArticleService(db, id, body as ArticlePayload);
     
     if (!updatedArticle) {
       return fail(c, 404, 'NOT_FOUND', '找不到該文章');
@@ -152,6 +162,23 @@ export const updateArticleController = async (c: Context<AppEnv>) => {
     return fail(c, 500, 'INTERNAL_ERROR', '更新文章失敗');
   }
 };
+
+const isValidArticlePayload = (body: Partial<ArticlePayload>): body is ArticlePayload => {
+  const hasValidOptionalString = (value: unknown, maxLength: number) =>
+    value === undefined || (typeof value === 'string' && value.length <= maxLength)
+
+  return typeof body.slug === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug) && body.slug.length <= 100 &&
+    typeof body.title === 'string' && body.title.trim().length > 0 && body.title.length <= 200 &&
+    typeof body.type === 'string' && body.type.trim().length > 0 && body.type.length <= 50 &&
+    typeof body.content === 'string' && body.content.trim().length > 0 && body.content.length <= 100_000 &&
+    hasValidOptionalString(body.cover_image, 255) &&
+    hasValidOptionalString(body.excerpt, 2_000) &&
+    hasValidOptionalString(body.github_url, 255) &&
+    hasValidOptionalString(body.demo_url, 255) &&
+    (body.is_published === undefined || typeof body.is_published === 'boolean') &&
+    (body.tags === undefined || (Array.isArray(body.tags) && body.tags.length <= 10 &&
+      body.tags.every(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.trim().length <= 50)))
+}
 
 /**
  * 刪除文章 (需權限)

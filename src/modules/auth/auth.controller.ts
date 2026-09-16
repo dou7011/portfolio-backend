@@ -4,20 +4,32 @@ import { loginUserService } from './auth.service'
 import type { AppEnv } from '../../types'
 import { logger } from '../../utils/logger'
 import { fail, ok } from '../../utils/response'
+import { parseJsonBody } from '../../utils/parseJsonBody'
 
 /**
  * 處理登入的 HTTP 請求與回應。
  */
 export const loginController = async (c: Context<AppEnv>) => {
-  const body = await c.req.json<{ email?: string; password?: string }>()
+  const body = await parseJsonBody<{ email?: string; password?: string }>(c)
+  if (!body) {
+    return fail(c, 400, 'BAD_REQUEST', '請提供有效的 JSON 請求內容')
+  }
+
   const { email, password } = body
 
-  if (!email || !password) {
+  if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password.trim()) {
     return fail(c, 400, 'BAD_REQUEST', '請提供信箱與密碼')
   }
 
   try {
-    const token = await loginUserService(c.env.DB, c.env.JWT_SECRET, email, password)
+    const token = await loginUserService(
+      c.env.DB,
+      c.env.JWT_SECRET,
+      c.env.JWT_ISSUER,
+      c.env.JWT_AUDIENCE,
+      email,
+      password
+    )
     return ok(c, { message: '登入成功', data: { token } })
   } catch (error: any) {
     logger.error('loginController', error)
