@@ -7,7 +7,8 @@
 - Base URL: http://localhost:8787
 - API Prefix: /api
 - Content-Type: application/json
-- Authentication: Authorization: Bearer <JWT_TOKEN>
+- Authentication: `portfolio_auth` HttpOnly cookie containing the JWT
+- CSRF: unsafe requests must send `X-CSRF-Token` matching the `portfolio_csrf` cookie
 - JWT Algorithm: HS256
 - CORS: 依 `wrangler.jsonc` 的 `ALLOWED_ORIGINS` 白名單設定
 
@@ -39,6 +40,7 @@
 - `UNAUTHORIZED`: 未登入、Token 缺失、Token 無效或過期
 - `FORBIDDEN`: 已登入但權限不足，或帳號被停用
 - `ACCOUNT_LOCKED`: 登入失敗達到上限，帳號暫時鎖定
+- `CSRF_FAILED`: 寫入請求缺少或帶有不相符的 CSRF token
 - `NOT_FOUND`: 查無資料
 - `CONFLICT`: 唯一值衝突（例如 email / role name 重複）
 - `INTERNAL_ERROR`: 伺服器內部錯誤
@@ -47,13 +49,24 @@
 
 ## 3. 認證與授權
 
-### 3.1 Bearer Token
+### 3.1 Cookie 認證
 
-所有受保護的 API 都須帶：
+登入成功後，後端會設定兩個 cookie：
 
 ```http
-Authorization: Bearer <token>
+Set-Cookie: portfolio_auth=<jwt>; HttpOnly; Path=/; Max-Age=28800
+Set-Cookie: portfolio_csrf=<random-value>; Path=/; Max-Age=28800
 ```
+
+所有受保護的 API 都由瀏覽器自動帶上 `portfolio_auth`。前端不應讀取 JWT、將 JWT 存入 `localStorage`，或自行建立 `Authorization` header。
+
+`portfolio_csrf` 不含登入憑證，可由前端讀取；所有 `POST`、`PUT`、`PATCH`、`DELETE` 請求（登入除外）都必須額外帶上：
+
+```http
+X-CSRF-Token: <portfolio_csrf cookie value>
+```
+
+`portfolio_csrf` cookie 與 `X-CSRF-Token` 不存在或內容不一致時，回傳 `403 CSRF_FAILED`。
 
 ### 3.2 權限列表
 
@@ -102,7 +115,8 @@ Authorization: Bearer <token>
 | Method | Path | Auth | Required Permission | 說明 |
 | --- | --- | --- | --- | --- |
 | GET | `/` | No | No | 健康檢查 |
-| POST | `/api/auth/login` | No | No | 登入取得 JWT |
+| POST | `/api/auth/login` | No | No | 登入並設定 auth／CSRF cookies |
+| POST | `/api/auth/logout` | No | No | 清除 auth／CSRF cookies |
 | GET | `/api/auth/me` | Yes | Any logged-in user | 取得目前登入者資料 |
 | GET | `/api/resume/:lang` | No | No | 依語系取得履歷 |
 | PUT | `/api/resume` | Yes | `resume:update` | 更新履歷 |
@@ -340,11 +354,11 @@ Request body:
 {
   "success": true,
   "message": "登入成功",
-  "data": {
-    "token": "<jwt-token>"
-  }
+  "data": null
 }
 ```
+
+成功時也會回傳 `Set-Cookie`，設定 `portfolio_auth`（`HttpOnly`）與 `portfolio_csrf` cookie。前端跨 origin 呼叫時必須使用 credentials。
 
 可能錯誤：
 
@@ -354,16 +368,26 @@ Request body:
 - `500 INTERNAL_ERROR`: 系統錯誤
 - `429 TOO_MANY_REQUESTS`: 短時間內登入嘗試過多
 
-### 8.2 GET /api/auth/me
+### 8.2 POST /api/auth/logout
 
-- 認證: 必須帶 Bearer Token
-- 權限: 任意已登入使用者
+- 認證：可選；有 cookie 時會清除登入狀態
+- 權限：無
+- CSRF：需要 `X-CSRF-Token` 與 `portfolio_csrf` cookie 相符
 
-Request headers:
+成功回應：
 
-```http
-Authorization: Bearer <jwt-token>
+```json
+{
+  "success": true,
+  "message": "已登出",
+  "data": null
+}
 ```
+
+### 8.3 GET /api/auth/me
+
+- 認證: 必須帶 `portfolio_auth` cookie
+- 權限: 任意已登入使用者
 
 成功回應：
 
@@ -434,13 +458,14 @@ Path params:
 
 ### 9.2 PUT /api/resume
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；寫入請求另需 `X-CSRF-Token`
 - 權限: `resume:update`
 
 Request headers:
 
 ```http
-Authorization: Bearer <jwt-token>
+Cookie: portfolio_auth=<jwt-token>; portfolio_csrf=<csrf-token>
+X-CSRF-Token: <csrf-token>
 Content-Type: application/json
 ```
 
@@ -515,7 +540,7 @@ Request body:
 
 ### 10.1 GET /api/users
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie
 - 權限: `users:read` 或 `users:write`
 
 成功回應：
@@ -548,7 +573,7 @@ Request body:
 
 ### 10.2 GET /api/users/:id
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie
 - 權限: `users:read` 或 `users:write`
 
 Path params:
@@ -585,7 +610,7 @@ Path params:
 
 ### 10.3 POST /api/users
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `users:write`
 
 Request body:
@@ -625,7 +650,7 @@ Request body:
 
 ### 10.4 PUT /api/users/:id
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `users:write`
 
 Request body:
@@ -662,7 +687,7 @@ Request body:
 
 ### 10.5 DELETE /api/users/:id
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `users:delete`
 
 成功回應：
@@ -685,7 +710,7 @@ Request body:
 
 ### 11.1 GET /api/roles
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie
 - 權限: `roles:read` 或 `roles:write`
 
 成功回應：
@@ -711,7 +736,7 @@ Request body:
 
 ### 11.2 GET /api/roles/:id
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie
 - 權限: `roles:read` 或 `roles:write`
 
 成功回應：
@@ -743,7 +768,7 @@ Request body:
 
 ### 11.3 POST /api/roles
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `roles:write`
 
 Request body:
@@ -781,7 +806,7 @@ Request body:
 
 ### 11.4 PUT /api/roles/:id
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `roles:write`
 
 Request body:
@@ -813,7 +838,7 @@ Request body:
 
 ### 11.5 DELETE /api/roles/:id
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `roles:delete`
 
 成功回應：
@@ -838,7 +863,7 @@ Request body:
 
 取得文章列表，支持分頁、類型、標籤、發布狀態與發布時間區間過濾，並回傳分類與標籤聚合統計。
 
-- 認證: 可選；帶有效 Bearer Token 時會依使用者權限決定是否可查詢草稿
+- 認證: 可選；帶有效 `portfolio_auth` cookie 時會依使用者權限決定是否可查詢草稿
 - 權限: `articles:write`（可選）
 
 Query Parameters:
@@ -922,7 +947,7 @@ Query Parameters:
 
 根據 slug 取得單篇文章詳細內容。
 
-- 認證: 可選；帶有效 Bearer Token 時會依使用者權限決定是否可查詢草稿
+- 認證: 可選；帶有效 `portfolio_auth` cookie 時會依使用者權限決定是否可查詢草稿
 - 權限: `articles:write`（可選），用於查看未發布文章
 
 未登入或沒有 `articles:write` 權限時，只能取得 `is_published=1` 的文章；具備 `articles:write` 權限時，可取得同 slug 的草稿文章。
@@ -965,7 +990,7 @@ Path Params:
 
 新增文章（需要認證和權限）。
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `articles:write`
 
 Request body：
@@ -1028,7 +1053,7 @@ Request body：
 
 更新文章（需要認證和權限）。
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `articles:write`
 
 Path Params:
@@ -1089,7 +1114,7 @@ Request body：
 
 刪除文章（需要認證和權限）。
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `articles:delete`
 
 Path Params:
@@ -1117,7 +1142,7 @@ Path Params:
 
 ### 13.1 GET /api/permissions
 
-- 認證: 必須帶 Bearer Token
+- 認證: 必須帶 `portfolio_auth` cookie
 - 權限: `permissions:read`
 
 成功回應：
@@ -1143,11 +1168,11 @@ Path Params:
 
 ## 14. 前端串接提醒
 
-- 除了 `GET /`、`POST /api/auth/login`、`GET /api/resume/:lang` 和公開的 Articles API（`GET /api/articles`、`GET /api/articles/:slug`）以外，其餘 API 都需要帶 Bearer Token。
+- 除了公開端點以外，其餘 API 都需要由瀏覽器帶上 `portfolio_auth` cookie；所有寫入請求（登入除外）還需要 `X-CSRF-Token`。
 - 有 request body 的請求請附帶 `Content-Type: application/json`。
 - 使用者 API 的 request body 使用 `isActive`，response 則是 `is_active`。
 - 角色與權限綁定請使用 `roleIds` 與 `permissionIds`。
-- 當前後端沒有 refresh token、logout API、以及 Swagger/OpenAPI 文件。
+- 當前後端沒有 refresh token 與 Swagger/OpenAPI 文件；已提供 `POST /api/auth/logout`。
 - Articles API 支持分頁，`page` 和 `pageSize` 參數可用於控制分頁。
 
 ## 15. 範例串接
@@ -1164,7 +1189,7 @@ curl -X POST http://localhost:8787/api/auth/login \
 
 ```bash
 curl http://localhost:8787/api/auth/me \
-  -H 'Authorization: Bearer <jwt-token>'
+  -b 'portfolio_auth=<jwt-token>'
 ```
 
 ### 取得履歷
@@ -1189,7 +1214,8 @@ curl http://localhost:8787/api/articles/my-article
 
 ```bash
 curl -X POST http://localhost:8787/api/articles \
-  -H 'Authorization: Bearer <jwt-token>' \
+  -b 'portfolio_auth=<jwt-token>; portfolio_csrf=<csrf-token>' \
+  -H 'X-CSRF-Token: <csrf-token>' \
   -H 'Content-Type: application/json' \
   -d '{
     "slug": "my-article",
@@ -1204,7 +1230,8 @@ curl -X POST http://localhost:8787/api/articles \
 
 ```bash
 curl -X PUT http://localhost:8787/api/resume \
-  -H 'Authorization: Bearer <jwt-token>' \
+  -b 'portfolio_auth=<jwt-token>; portfolio_csrf=<csrf-token>' \
+  -H 'X-CSRF-Token: <csrf-token>' \
   -H 'Content-Type: application/json' \
   -d '{
     "lang": "zh",
@@ -1217,46 +1244,19 @@ curl -X PUT http://localhost:8787/api/resume \
   }'
 ```
 
-- 認證: Bearer Token
-- 權限: 只要登入即可
+### 登出
 
-Request Headers:
-
-```http
-Authorization: Bearer <JWT_TOKEN>
+```bash
+curl -X POST http://localhost:8787/api/auth/logout \
+  -b 'portfolio_auth=<jwt-token>; portfolio_csrf=<csrf-token>' \
+  -H 'X-CSRF-Token: <csrf-token>'
 ```
-
-成功回應 `200 OK`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "email": "dou7011@gmail.com",
-    "roles": ["SUPER_ADMIN"],
-    "permissions": [
-      "resume:update",
-      "users:read",
-      "users:write",
-      "users:delete",
-      "roles:read",
-      "roles:write",
-      "roles:delete",
-      "permissions:read"
-    ]
-  }
-}
-```
-
-可能錯誤:
-
-- `401 UNAUTHORIZED`: 未提供 Token / Token 無效 / Token 過期 / 帳號不存在
-- `403 FORBIDDEN`: 帳號已停用
 
 ## 附錄：歷史版補充說明
 
 以下內容是早期文件保留的補充範例，與前方章節重複。若欄位、狀態碼或行為描述不一致，請以前方端點總表、文章章節與目前 `src/` 實作為準；維護新內容時請更新前方章節，不要在此附錄新增契約。
+
+> 注意：本附錄中的舊 Bearer Token 範例僅供歷史追溯，已不適用於目前實作。目前認證請依第 3 節使用 `portfolio_auth` HttpOnly cookie，寫入請求依 CSRF 規則帶 `X-CSRF-Token`。
 
 ### 6.3 Resume
 
@@ -1301,13 +1301,14 @@ Path Params:
 
 #### PUT /api/resume
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie；寫入請求另需 `X-CSRF-Token`
 - 權限: `resume:update`
 
 Request Headers:
 
 ```http
-Authorization: Bearer <JWT_TOKEN>
+Cookie: portfolio_auth=<jwt-token>
+X-CSRF-Token: <csrf-token>
 Content-Type: application/json
 ```
 
@@ -1381,7 +1382,7 @@ Request Body:
 
 #### GET /api/users
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie
 - 權限: `users:read` 或 `users:write`
 - Query: 無
 
@@ -1419,7 +1420,7 @@ Request Body:
 
 #### GET /api/users/:id
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie
 - 權限: `users:read` 或 `users:write`
 
 Path Params:
@@ -1456,7 +1457,7 @@ Path Params:
 
 #### POST /api/users
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `users:write`
 
 Request Body:
@@ -1496,7 +1497,7 @@ Request Body:
 
 #### PUT /api/users/:id
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `users:write`
 
 Path Params:
@@ -1537,7 +1538,7 @@ Request Body:
 
 #### DELETE /api/users/:id
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `users:delete`
 
 Path Params:
@@ -1568,7 +1569,7 @@ Path Params:
 
 #### GET /api/roles
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie
 - 權限: `roles:read` 或 `roles:write`
 
 成功回應 `200 OK`
@@ -1600,7 +1601,7 @@ Path Params:
 
 #### GET /api/roles/:id
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie
 - 權限: `roles:read` 或 `roles:write`
 
 Path Params:
@@ -1636,7 +1637,7 @@ Path Params:
 
 #### POST /api/roles
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `roles:write`
 
 Request Body:
@@ -1674,7 +1675,7 @@ Request Body:
 
 #### PUT /api/roles/:id
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `roles:write`
 
 Path Params:
@@ -1716,7 +1717,7 @@ Request Body:
 
 #### DELETE /api/roles/:id
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie；另需 `X-CSRF-Token`
 - 權限: `roles:delete`
 
 Path Params:
@@ -1747,7 +1748,7 @@ Path Params:
 
 #### GET /api/permissions
 
-- 認證: Bearer Token
+- 認證: `portfolio_auth` cookie
 - 權限: `permissions:read`
 
 成功回應 `200 OK`
@@ -1773,9 +1774,9 @@ Path Params:
 
 ## 7. 前端串接注意事項
 
-### 7.1 Header 規則
+## 7.1 Header 規則
 
-- 除了 `GET /`、`POST /api/auth/login`、`GET /api/resume/:lang` 以外，其餘 API 都要帶 Bearer Token
+- 除了公開端點以外，其餘 API 都需要 `portfolio_auth` cookie；所有寫入請求（登入除外）還需要 `X-CSRF-Token`
 - 有 request body 的請求要帶 `Content-Type: application/json`
 
 ### 7.2 欄位命名不一致處
@@ -1787,7 +1788,7 @@ Path Params:
 ### 7.3 後端目前未提供的能力
 
 - 沒有 refresh token 機制
-- 沒有 logout API
+- 已提供 `POST /api/auth/logout`，但沒有 refresh token 機制
 - 沒有分頁、搜尋、排序 query
 - 沒有欄位級 schema validation
 - 沒有 OpenAPI / Swagger 文件

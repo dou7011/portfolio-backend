@@ -6,14 +6,14 @@
 ![Cloudflare D1](https://img.shields.io/badge/Cloudflare%20D1-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
-這個專案是個人作品集與後台管理系統的 API 層，採用 Cloudflare Workers + Hono + D1 架構，提供履歷資料、文章資料、權限管理與 JWT 驗證等功能。
+這個專案是個人作品集與後台管理系統的 API 層，採用 Cloudflare Workers + Hono + D1 架構，提供履歷資料、文章資料、權限管理與 cookie-based JWT 驗證等功能。
 
 ## 目前架構
 
 - Runtime: Cloudflare Workers
 - Framework: Hono
 - Database: Cloudflare D1 (SQLite)
-- Auth: JWT + middleware guard
+- Auth: HttpOnly cookie-based JWT + auth middleware guard
 - Language: TypeScript
 - Modules: auth / resume / users / roles / permissions / articles
 
@@ -29,7 +29,8 @@ portfolio-backend/
 │   ├── constants/                         # 共用常數
 │   │   └── permissions.ts                 # RBAC 權限字串定義
 │   ├── middleware/                        # 全域與路由級中介層
-│   │   ├── authGuard.ts                   # JWT 驗證守衛
+│   │   ├── authGuard.ts                   # HttpOnly cookie JWT 驗證守衛
+│   │   ├── csrfGuard.ts                   # 寫入請求的 CSRF 驗證
 │   │   ├── loginRate.ts                   # 登入端點的來源 IP 速率限制
 │   │   └── permissionGuard.ts             # 權限驗證守衛
 │   ├── modules/                           # 功能模組
@@ -38,7 +39,7 @@ portfolio-backend/
 │   │   │   ├── articles.route.ts          # 文章路由定義
 │   │   │   └── articles.service.ts        # 文章查詢與操作邏輯
 │   │   ├── auth/                          # 認證模組
-│   │   │   ├── auth.controller.ts         # 登入 / me 控制器
+│   │   │   ├── auth.controller.ts         # 登入 / logout / me 控制器
 │   │   │   ├── auth.route.ts              # `/api/auth` 路由
 │   │   │   └── auth.service.ts            # 登入、JWT、使用者驗證邏輯
 │   │   ├── permissions/                   # 權限查詢模組
@@ -80,7 +81,7 @@ portfolio-backend/
 
 ## 目前已實作功能
 
-- 使用者登入與 JWT 認證
+- 使用者登入、HttpOnly cookie JWT 認證與登出
 - 取得當前登入者資訊
 - 履歷讀取與更新
 - 使用者 / 角色 / 權限 CRUD
@@ -88,7 +89,7 @@ portfolio-backend/
 - 公開文章列表與 slug 查詢
 - RBAC 權限 guard
 - 登入安全防護：來源 IP 速率限制與帳號鎖定
-- 統一 API 回應格式與 CORS 設定
+- 統一 API 回應格式、CORS 與 CSRF 設定
 
 ## 本機開發
 
@@ -185,7 +186,8 @@ npm run deploy
 | 方法 | 路徑 | 說明 |
 | --- | --- | --- |
 | `GET` | `/` | 健康檢查 |
-| `POST` | `/api/auth/login` | 登入並取得 JWT |
+| `POST` | `/api/auth/login` | 登入並設定 HttpOnly auth cookie 與 CSRF cookie |
+| `POST` | `/api/auth/logout` | 清除 auth cookie 與 CSRF cookie |
 | `GET` | `/api/auth/me` | 取得當前登入者資訊 |
 | `GET` | `/api/resume/:lang` | 依語系取得履歷內容 |
 | `PUT` | `/api/resume` | 更新履歷內容 |
@@ -237,5 +239,6 @@ npm run deploy
 - CORS 依 `ALLOWED_ORIGINS` 白名單限制來源。
 - 不要將 `.dev.vars` 或實際機密提交至版本控制。
 - `npm run deploy` 只部署 Worker，不會自動執行 D1 schema 或 seed。
-- `GET /api/articles` 與 `GET /api/articles/:slug` 對外公開已發布內容；帶有效 Bearer Token 且具備 `articles:write` 權限時，可查詢草稿。文章列表的 `is_published` 可使用 `0`、`1`、`false`、`true`，省略時預設為 `1`；無此權限時固定為 `1`。
+- `GET /api/articles` 與 `GET /api/articles/:slug` 對外公開已發布內容；帶有效 auth cookie 且具備 `articles:write` 權限時，可查詢草稿。文章列表的 `is_published` 可使用 `0`、`1`、`false`、`true`，省略時預設為 `1`；無此權限時固定為 `1`。
+- 受保護 API 使用 `portfolio_auth` HttpOnly cookie；前端寫入請求也必須帶 `X-CSRF-Token`，其值需等於 `portfolio_csrf` cookie。不要把 JWT 讀入 `localStorage` 或手動放入 `Authorization` header。
 
