@@ -116,7 +116,7 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 JWT_SECRET=your-local-secret
 ```
 
-`ALLOWED_ORIGINS` 目前由 `wrangler.jsonc` 的 `vars` 提供，使用逗號分隔多個來源。不要把 `JWT_SECRET` 寫入 `wrangler.jsonc` 或提交到 Git。
+`ALLOWED_ORIGINS` 使用逗號分隔多個來源。`wrangler.jsonc` 目前只列正式前端 HTTPS 網域；本機開發請在未提交的 `.dev.vars` 覆寫為 `http://localhost:4200`。不要把 `JWT_SECRET` 寫入 `wrangler.jsonc` 或提交到 Git。
 
 ### 5. 建立本機登入帳號
 
@@ -159,6 +159,8 @@ npm run deploy
 
 後續版本若修改資料表，請新增可重複追蹤的 migration SQL，並先在本機 D1 驗證，再執行遠端 D1 指令。不要直接覆蓋既有資料庫。
 
+登入端點由 Cloudflare Rate Limiting binding 保護，目前設定為每個來源 IP 每 60 秒最多 5 次；正式環境仍應在 Cloudflare Dashboard 確認實際 binding、WAF 與告警設定。
+
 ## 可用腳本
 
 | 指令 | 說明 |
@@ -168,6 +170,7 @@ npm run deploy
 | `npm run cf-typegen` | 產生 Cloudflare bindings 型別 |
 | `npm run gen:seed-user` | 產生種子帳號用雜湊值與 SQL |
 | `npm run typecheck` | 執行 TypeScript 型別檢查 |
+| `npm test` | 執行 Vitest 回歸測試 |
 
 ## API 概覽
 

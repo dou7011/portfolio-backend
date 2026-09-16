@@ -42,6 +42,8 @@
 - `CONFLICT`: 唯一值衝突（例如 email / role name 重複）
 - `INTERNAL_ERROR`: 伺服器內部錯誤
 
+登入端點另有 Cloudflare Rate Limiting 保護，目前每個來源 IP 每 60 秒最多 5 次；超過限制回傳 HTTP 429 與 `TOO_MANY_REQUESTS`。
+
 ## 3. 認證與授權
 
 ### 3.1 Bearer Token
@@ -348,6 +350,7 @@ Request body:
 - `400 BAD_REQUEST`: 缺少 email 或 password
 - `401 UNAUTHORIZED`: 帳號或密碼錯誤
 - `500 INTERNAL_ERROR`: 系統錯誤
+- `429 TOO_MANY_REQUESTS`: 短時間內登入嘗試過多
 
 ### 8.2 GET /api/auth/me
 
