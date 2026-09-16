@@ -3,6 +3,7 @@ import { verify } from 'hono/jwt'
 import type { AppEnv } from '../types'
 import { fail } from '../utils/response'
 import { safeJsonParse } from '../utils/safeJsonParse'
+import { getCookie } from 'hono/cookie'
 
 const isValidJwtPayload = (payload: unknown, issuer: string, audience: string): payload is { id: number; iss: string; aud: string } => {
   if (!payload || typeof payload !== 'object') return false
@@ -20,14 +21,9 @@ const isValidJwtPayload = (payload: unknown, issuer: string, audience: string): 
 }
 
 const authenticateUser = async (c: Context<AppEnv>) => {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return fail(c, 401, 'UNAUTHORIZED', '未提供授權憑證')
-  }
-
-  const token = authHeader.slice('Bearer '.length).trim()
+  const token = getCookie(c, 'portfolio_auth')
   if (!token) {
-    return fail(c, 401, 'UNAUTHORIZED', 'Bearer token 不可為空')
+    return fail(c, 401, 'UNAUTHORIZED', '未提供授權憑證')
   }
 
   try {
@@ -93,14 +89,10 @@ export const authGuard = async (c: Context<AppEnv>, next: Next) => {
 
 // 可選的 JWT 驗證：公開請求可繼續，合法使用者仍會載入角色與權限。
 export const optionalAuthGuard = async (c: Context<AppEnv>, next: Next) => {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader) {
+  const token = getCookie(c, 'portfolio_auth')
+  if (!token) {
     await next()
     return
-  }
-
-  if (!authHeader.startsWith('Bearer ')) {
-    return fail(c, 401, 'UNAUTHORIZED', '授權格式錯誤，請使用 Bearer token')
   }
 
   const errorResponse = await authenticateUser(c)

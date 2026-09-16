@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'BAD_REQUEST'
   | 'UNAUTHORIZED'
   | 'ACCOUNT_LOCKED'
+  | 'CSRF_FAILED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'

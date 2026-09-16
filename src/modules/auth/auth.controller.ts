@@ -5,6 +5,7 @@ import type { AppEnv } from '../../types'
 import { logger } from '../../utils/logger'
 import { fail, ok } from '../../utils/response'
 import { parseJsonBody } from '../../utils/parseJsonBody'
+import { deleteCookie, setCookie } from 'hono/cookie'
 
 /**
  * 處理登入的 HTTP 請求與回應。
@@ -30,7 +31,22 @@ export const loginController = async (c: Context<AppEnv>) => {
       email,
       password
     )
-    return ok(c, { message: '登入成功', data: { token } })
+    const isSecure = new URL(c.req.url).protocol === 'https:'
+    const sameSite = isSecure ? 'None' : 'Lax'
+    setCookie(c, 'portfolio_auth', token, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite,
+      path: '/',
+      maxAge: 8 * 60 * 60,
+    })
+    setCookie(c, 'portfolio_csrf', crypto.randomUUID(), {
+      secure: isSecure,
+      sameSite,
+      path: '/',
+      maxAge: 8 * 60 * 60,
+    })
+    return ok(c, { message: '登入成功', data: null })
   } catch (error: any) {
     logger.error('loginController', error)
     if (error.message === 'AUTH_FAILED') {
@@ -45,6 +61,12 @@ export const loginController = async (c: Context<AppEnv>) => {
     }
     return fail(c, 500, 'INTERNAL_ERROR', '系統錯誤，請稍後再試')
   }
+}
+
+export const logoutController = (c: Context<AppEnv>) => {
+  deleteCookie(c, 'portfolio_auth', { path: '/' })
+  deleteCookie(c, 'portfolio_csrf', { path: '/' })
+  return ok(c, { message: '已登出', data: null })
 }
 
 /**

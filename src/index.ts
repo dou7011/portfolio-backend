@@ -12,6 +12,7 @@ import rolesApp from './modules/roles/roles.route'
 import permissionsApp from './modules/permissions/permissions.route'
 import articlesApp from './modules/articles/articles.route'
 import type { AppEnv } from './types'
+import { csrfGuard } from './middleware/csrfGuard'
 
 // 建立 Hono 應用實例，所有 API 入口都由此統一掛載。
 const app = new Hono<AppEnv>({ strict: false })
@@ -34,10 +35,12 @@ app.use(
       return null
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowHeaders: ['Content-Type', 'X-CSRF-Token'],
     credentials: true,
   })
 )
+
+app.use('/*', csrfGuard)
 
 app.get('/', (c) => c.text('Portfolio Backend 運作正常！'))
 
