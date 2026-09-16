@@ -64,8 +64,19 @@ export const loginController = async (c: Context<AppEnv>) => {
 }
 
 export const logoutController = (c: Context<AppEnv>) => {
-  deleteCookie(c, 'portfolio_auth', { path: '/' })
-  deleteCookie(c, 'portfolio_csrf', { path: '/' })
+  const isSecure = new URL(c.req.url).protocol === 'https:'
+  const sameSite = isSecure ? 'None' : 'Lax'
+  const expiredCookieOptions = {
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+    secure: isSecure,
+    sameSite,
+  } as const
+
+  deleteCookie(c, 'portfolio_auth', expiredCookieOptions)
+  deleteCookie(c, 'portfolio_csrf', expiredCookieOptions)
+  c.header('Clear-Site-Data', '"cookies"')
   return ok(c, { message: '已登出', data: null })
 }
 
