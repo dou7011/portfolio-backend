@@ -38,11 +38,12 @@
 - `BAD_REQUEST`: 缺少必要欄位、參數不合法
 - `UNAUTHORIZED`: 未登入、Token 缺失、Token 無效或過期
 - `FORBIDDEN`: 已登入但權限不足，或帳號被停用
+- `ACCOUNT_LOCKED`: 登入失敗達到上限，帳號暫時鎖定
 - `NOT_FOUND`: 查無資料
 - `CONFLICT`: 唯一值衝突（例如 email / role name 重複）
 - `INTERNAL_ERROR`: 伺服器內部錯誤
 
-登入端點另有 Cloudflare Rate Limiting 保護，目前每個來源 IP 每 60 秒最多 5 次；超過限制回傳 HTTP 429 與 `TOO_MANY_REQUESTS`。
+登入端點另有兩層保護：Cloudflare Rate Limiting 依來源 IP 每 60 秒最多 5 次，超過限制回傳 HTTP 429 與 `TOO_MANY_REQUESTS`；同一個啟用中的帳號連續登入失敗 5 次後鎖定 15 分鐘，鎖定期間回傳 HTTP 423 與 `ACCOUNT_LOCKED`。
 
 ## 3. 認證與授權
 
@@ -349,6 +350,7 @@ Request body:
 
 - `400 BAD_REQUEST`: 缺少 email 或 password
 - `401 UNAUTHORIZED`: 帳號或密碼錯誤
+- `423 ACCOUNT_LOCKED`: 帳號已鎖定，訊息包含剩餘鎖定分鐘數
 - `500 INTERNAL_ERROR`: 系統錯誤
 - `429 TOO_MANY_REQUESTS`: 短時間內登入嘗試過多
 

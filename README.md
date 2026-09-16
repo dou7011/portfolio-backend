@@ -30,6 +30,7 @@ portfolio-backend/
 │   │   └── permissions.ts                 # RBAC 權限字串定義
 │   ├── middleware/                        # 全域與路由級中介層
 │   │   ├── authGuard.ts                   # JWT 驗證守衛
+│   │   ├── loginRate.ts                   # 登入端點的來源 IP 速率限制
 │   │   └── permissionGuard.ts             # 權限驗證守衛
 │   ├── modules/                           # 功能模組
 │   │   ├── articles/                      # 文章 / 作品 CRUD
@@ -86,6 +87,7 @@ portfolio-backend/
 - 文章與作品內容 CRUD，支持分頁、類型/標籤/時間區間過濾與分類/標籤聚合統計
 - 公開文章列表與 slug 查詢
 - RBAC 權限 guard
+- 登入安全防護：來源 IP 速率限制與帳號鎖定
 - 統一 API 回應格式與 CORS 設定
 
 ## 本機開發
@@ -159,7 +161,13 @@ npm run deploy
 
 後續版本若修改資料表，請新增可重複追蹤的 migration SQL，並先在本機 D1 驗證，再執行遠端 D1 指令。不要直接覆蓋既有資料庫。
 
-登入端點由 Cloudflare Rate Limiting binding 保護，目前設定為每個來源 IP 每 60 秒最多 5 次；正式環境仍應在 Cloudflare Dashboard 確認實際 binding、WAF 與告警設定。
+### 登入安全防護
+
+- **來源 IP 速率限制**：`POST /api/auth/login` 使用 Cloudflare Rate Limiting binding，依 `cf-connecting-ip` 辨識來源 IP，每個 IP 每 60 秒最多 5 次；超過限制回傳 HTTP `429` 與 `TOO_MANY_REQUESTS`。無法取得來源 IP 時使用 `unknown-ip` 作為 key。
+- **帳號鎖定**：同一個啟用中的帳號連續登入失敗 5 次後鎖定 15 分鐘。鎖定期間回傳 HTTP `423`、錯誤碼 `ACCOUNT_LOCKED` 與剩餘分鐘數；成功登入會將失敗次數與鎖定狀態重置。
+- **資料欄位**：帳號鎖定狀態儲存在 `users.failed_login_attempts` 與 `users.locked_until`。停用帳號或不存在的 email 會回傳一般 `401 UNAUTHORIZED`，不會建立帳號鎖定計數。
+
+正式環境仍應在 Cloudflare Dashboard 確認 Rate Limiting binding、WAF 與告警設定。
 
 ## 可用腳本
 

@@ -4,6 +4,7 @@ import type { Context } from 'hono'
 export type ErrorCode =
   | 'BAD_REQUEST'
   | 'UNAUTHORIZED'
+  | 'ACCOUNT_LOCKED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
@@ -11,7 +12,7 @@ export type ErrorCode =
 
 export const fail = (
   c: Context,
-  status: 400 | 401 | 403 | 404 | 409 | 500,
+  status: 400 | 401 | 403 | 404 | 409 | 423 | 500,
   code: ErrorCode,
   message: string
 ) => {

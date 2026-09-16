@@ -36,6 +36,13 @@ export const loginController = async (c: Context<AppEnv>) => {
     if (error.message === 'AUTH_FAILED') {
       return fail(c, 401, 'UNAUTHORIZED', '帳號或密碼錯誤')
     }
+    if (typeof error.message === 'string' && error.message.startsWith('ACCOUNT_LOCKED:')) {
+      const remainMinutes = Number(error.message.split(':')[1])
+      const message = Number.isFinite(remainMinutes)
+        ? `帳號已鎖定，請在 ${remainMinutes} 分鐘後再試`
+        : '帳號已鎖定，請稍後再試'
+      return fail(c, 423, 'ACCOUNT_LOCKED', message)
+    }
     return fail(c, 500, 'INTERNAL_ERROR', '系統錯誤，請稍後再試')
   }
 }
