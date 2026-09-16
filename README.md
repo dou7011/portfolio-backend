@@ -240,5 +240,5 @@ npm run deploy
 - 不要將 `.dev.vars` 或實際機密提交至版本控制。
 - `npm run deploy` 只部署 Worker，不會自動執行 D1 schema 或 seed。
 - `GET /api/articles` 與 `GET /api/articles/:slug` 對外公開已發布內容；帶有效 auth cookie 且具備 `articles:write` 權限時，可查詢草稿。文章列表的 `is_published` 可使用 `0`、`1`、`false`、`true`，省略時預設為 `1`；無此權限時固定為 `1`。
-- 受保護 API 使用 `portfolio_auth` HttpOnly cookie；前端寫入請求也必須帶 `X-CSRF-Token`，其值需等於 `portfolio_csrf` cookie。不要把 JWT 讀入 `localStorage` 或手動放入 `Authorization` header。
+- 受保護 API 使用 `portfolio_auth` HttpOnly cookie；除了 login／logout 外，前端寫入請求也必須帶 `X-CSRF-Token`，其值需等於 `portfolio_csrf` cookie。不要把 JWT 讀入 `localStorage` 或手動放入 `Authorization` header。
 

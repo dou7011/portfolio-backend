@@ -60,7 +60,7 @@ Set-Cookie: portfolio_csrf=<random-value>; Path=/; Max-Age=28800
 
 所有受保護的 API 都由瀏覽器自動帶上 `portfolio_auth`。前端不應讀取 JWT、將 JWT 存入 `localStorage`，或自行建立 `Authorization` header。
 
-`portfolio_csrf` 不含登入憑證，可由前端讀取；所有 `POST`、`PUT`、`PATCH`、`DELETE` 請求（登入除外）都必須額外帶上：
+`portfolio_csrf` 不含登入憑證，可由前端讀取；除了 login／logout 外，所有 `POST`、`PUT`、`PATCH`、`DELETE` 請求都必須額外帶上：
 
 ```http
 X-CSRF-Token: <portfolio_csrf cookie value>
@@ -372,7 +372,7 @@ Request body:
 
 - 認證：可選；有 cookie 時會清除登入狀態
 - 權限：無
-- CSRF：需要 `X-CSRF-Token` 與 `portfolio_csrf` cookie 相符
+- CSRF：logout 不要求 CSRF token，讓缺少 CSRF cookie 的使用者仍能清除登入 cookie
 
 成功回應：
 
@@ -1168,7 +1168,7 @@ Path Params:
 
 ## 14. 前端串接提醒
 
-- 除了公開端點以外，其餘 API 都需要由瀏覽器帶上 `portfolio_auth` cookie；所有寫入請求（登入除外）還需要 `X-CSRF-Token`。
+- 除了公開端點以外，其餘 API 都需要由瀏覽器帶上 `portfolio_auth` cookie；除了 login／logout 外，所有寫入請求還需要 `X-CSRF-Token`。
 - 有 request body 的請求請附帶 `Content-Type: application/json`。
 - 使用者 API 的 request body 使用 `isActive`，response 則是 `is_active`。
 - 角色與權限綁定請使用 `roleIds` 與 `permissionIds`。
@@ -1776,7 +1776,7 @@ Path Params:
 
 ## 7.1 Header 規則
 
-- 除了公開端點以外，其餘 API 都需要 `portfolio_auth` cookie；所有寫入請求（登入除外）還需要 `X-CSRF-Token`
+- 除了公開端點以外，其餘 API 都需要 `portfolio_auth` cookie；除了 login／logout 外，所有寫入請求還需要 `X-CSRF-Token`
 - 有 request body 的請求要帶 `Content-Type: application/json`
 
 ### 7.2 欄位命名不一致處

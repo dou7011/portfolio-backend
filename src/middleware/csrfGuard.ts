@@ -6,7 +6,11 @@ import { fail } from '../utils/response'
 const unsafeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export const csrfGuard = async (c: Context<AppEnv>, next: Next) => {
-  if (!unsafeMethods.has(c.req.method) || c.req.path.endsWith('/auth/login')) {
+  if (
+    !unsafeMethods.has(c.req.method) ||
+    c.req.path.endsWith('/auth/login') ||
+    c.req.path.endsWith('/auth/logout')
+  ) {
     await next()
     return
   }
