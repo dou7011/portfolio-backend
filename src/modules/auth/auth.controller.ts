@@ -5,7 +5,7 @@ import type { AppEnv } from '../../types'
 import { logger } from '../../utils/logger'
 import { fail, ok } from '../../utils/response'
 import { parseJsonBody } from '../../utils/parseJsonBody'
-import { deleteCookie, setCookie } from 'hono/cookie'
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 
 /**
  * 處理登入的 HTTP 請求與回應。
@@ -40,13 +40,14 @@ export const loginController = async (c: Context<AppEnv>) => {
       path: '/',
       maxAge: 8 * 60 * 60,
     })
-    setCookie(c, 'portfolio_csrf', crypto.randomUUID(), {
+    const csrfToken = crypto.randomUUID()
+    setCookie(c, 'portfolio_csrf', csrfToken, {
       secure: isSecure,
       sameSite,
       path: '/',
       maxAge: 8 * 60 * 60,
     })
-    return ok(c, { message: '登入成功', data: null })
+    return ok(c, { message: '登入成功', data: { csrfToken } })
   } catch (error: any) {
     logger.error('loginController', error)
     if (error.message === 'AUTH_FAILED') {
@@ -85,6 +86,7 @@ export const logoutController = (c: Context<AppEnv>) => {
  */
 export const getMeController = async (c: Context<AppEnv>) => {
   const user = c.get('user')
+  const csrfToken = getCookie(c, 'portfolio_csrf')
 
   return ok(c, {
     data: {
@@ -92,6 +94,7 @@ export const getMeController = async (c: Context<AppEnv>) => {
       email: user.email,
       roles: user.roles,
       permissions: user.permissions,
+      csrfToken,
     },
   })
 }

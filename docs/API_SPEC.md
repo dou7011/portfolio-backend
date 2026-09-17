@@ -60,7 +60,7 @@ Set-Cookie: portfolio_csrf=<random-value>; Path=/; Max-Age=28800
 
 所有受保護的 API 都由瀏覽器自動帶上 `portfolio_auth`。前端不應讀取 JWT、將 JWT 存入 `localStorage`，或自行建立 `Authorization` header。
 
-`portfolio_csrf` 不含登入憑證，可由前端讀取；除了 login／logout 外，所有 `POST`、`PUT`、`PATCH`、`DELETE` 請求都必須額外帶上：
+`portfolio_csrf` 不含登入憑證。除了 login／logout 外，所有 `POST`、`PUT`、`PATCH`、`DELETE` 請求都必須額外帶上：
 
 ```http
 X-CSRF-Token: <portfolio_csrf cookie value>
@@ -354,11 +354,14 @@ Request body:
 {
   "success": true,
   "message": "登入成功",
-  "data": null
+  "data": {
+    "csrfToken": "<random-value>"
+  }
 }
 ```
 
 成功時也會回傳 `Set-Cookie`，設定 `portfolio_auth`（`HttpOnly`）與 `portfolio_csrf` cookie。前端跨 origin 呼叫時必須使用 credentials。
+前端應使用登入回應中的 `csrfToken`；`GET /api/auth/me` 的回應也會提供目前的 `csrfToken`，方便既有登入狀態初始化。
 
 可能錯誤：
 
