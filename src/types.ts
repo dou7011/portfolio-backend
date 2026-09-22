@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
 
 /**
  * 經 authGuard 驗證後，注入到 Hono Context 的使用者資料。
@@ -15,6 +15,7 @@ export type AuthUser = {
  */
 export type AppBindings = {
   DB: D1Database;
+  BUCKET: R2Bucket;
   JWT_SECRET: string;
   JWT_ISSUER: string;
   JWT_AUDIENCE: string;
