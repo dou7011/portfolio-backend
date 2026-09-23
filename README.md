@@ -6,16 +6,17 @@
 ![Cloudflare D1](https://img.shields.io/badge/Cloudflare%20D1-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
-這個專案是個人作品集與後台管理系統的 API 層，採用 Cloudflare Workers + Hono + D1 架構，提供履歷資料、文章資料、權限管理與 cookie-based JWT 驗證等功能。
+這個專案是個人作品集與後台管理系統的 API 層，採用 Cloudflare Workers + Hono + D1 + R2 架構，提供履歷資料、文章資料、圖片上傳、權限管理與 cookie-based JWT 驗證等功能。
 
 ## 目前架構
 
 - Runtime: Cloudflare Workers
 - Framework: Hono
 - Database: Cloudflare D1 (SQLite)
+- Object storage: Cloudflare R2
 - Auth: HttpOnly cookie-based JWT + auth middleware guard
 - Language: TypeScript
-- Modules: auth / resume / users / roles / permissions / articles
+- Modules: auth / resume / users / roles / permissions / articles / upload
 
 ## 專案結構
 
@@ -50,6 +51,10 @@ portfolio-backend/
 │   │   │   ├── resume.controller.ts       # 履歷讀寫控制器
 │   │   │   ├── resume.route.ts            # `/api/resume` 路由
 │   │   │   └── resume.service.ts          # 履歷資料庫邏輯
+│   │   ├── upload/                        # R2 圖片上傳與讀取模組
+│   │   │   ├── upload.controller.ts        # multipart 請求與圖片回應控制器
+│   │   │   ├── upload.route.ts             # `/api/upload` 路由
+│   │   │   └── upload.service.ts           # R2 物件讀寫邏輯
 │   │   ├── roles/                         # 角色管理模組
 │   │   │   ├── roles.controller.ts        # 角色控制器
 │   │   │   ├── roles.route.ts             # 角色路由
@@ -87,6 +92,7 @@ portfolio-backend/
 - 使用者 / 角色 / 權限 CRUD
 - 文章與作品內容 CRUD，支持分頁、類型/標籤/時間區間過濾與分類/標籤聚合統計
 - 公開文章列表與 slug 查詢
+- 圖片上傳至 R2 與公開圖片讀取端點
 - RBAC 權限 guard
 - 登入安全防護：來源 IP 速率限制與帳號鎖定
 - 統一 API 回應格式、CORS 與 CSRF 設定
@@ -117,9 +123,13 @@ npx wrangler d1 execute portfolio-db --local --file=./seed.sql
 
 ```bash
 JWT_SECRET=your-local-secret
+ALLOWED_ORIGINS=http://localhost:4200
+JWT_ISSUER=hotailin-portfolio-backend
+JWT_AUDIENCE=hotailin-portfolio-frontend
+CDN_URL=http://localhost:8787/api/upload
 ```
 
-`ALLOWED_ORIGINS` 使用逗號分隔多個來源。`wrangler.jsonc` 目前只列正式前端 HTTPS 網域；本機開發請在未提交的 `.dev.vars` 覆寫為 `http://localhost:4200`。不要把 `JWT_SECRET` 寫入 `wrangler.jsonc` 或提交到 Git。
+`ALLOWED_ORIGINS` 可用逗號分隔多個來源。`CDN_URL` 是上傳成功後回傳的圖片網址前綴；本機建議設定為 API 的公開讀取路由。正式環境可設定為綁定 R2 的自訂網域，或設為 `https://api.hotailin.com/api/upload` 使用 Worker 讀取端點。不要把 `JWT_SECRET` 寫入 `wrangler.jsonc` 或提交 `.dev.vars`。
 
 ### 5. 建立本機登入帳號
 
@@ -159,6 +169,8 @@ npm run deploy
 ```
 
 遠端 D1 的 seed 同樣不會建立使用者；請先用 `npm run gen:seed-user` 產生 SQL，再以 `--remote` 執行。正式環境請確認 `ALLOWED_ORIGINS` 已包含實際前端網址。
+
+部署前也必須先建立 `wrangler.jsonc` 所指定的 R2 bucket，並將正式 `CDN_URL` 設為可公開取得 `images/...` 物件的網址前綴。
 
 後續版本若修改資料表，請新增可重複追蹤的 migration SQL，並先在本機 D1 驗證，再執行遠端 D1 指令。不要直接覆蓋既有資料庫。
 
@@ -207,6 +219,8 @@ npm run deploy
 | `POST` | `/api/articles` | 建立文章 / 作品 |
 | `PUT` | `/api/articles/:id` | 更新文章 / 作品 |
 | `DELETE` | `/api/articles/:id` | 刪除文章 / 作品 |
+| `POST` | `/api/upload` | 上傳圖片；使用 `multipart/form-data` 並以 `image` 傳送檔案 |
+| `GET` | `/api/upload/images/:yearMonth/:filename` | 取得上傳圖片 |
 
 ## 權限模型
 
@@ -240,5 +254,6 @@ npm run deploy
 - 不要將 `.dev.vars` 或實際機密提交至版本控制。
 - `npm run deploy` 只部署 Worker，不會自動執行 D1 schema 或 seed。
 - `GET /api/articles` 與 `GET /api/articles/:slug` 對外公開已發布內容；帶有效 auth cookie 且具備 `articles:write` 權限時，可查詢草稿。文章列表的 `is_published` 可使用 `0`、`1`、`false`、`true`，省略時預設為 `1`；無此權限時固定為 `1`。
+- `POST /api/upload` 需要登入、`articles:write` 權限與 `X-CSRF-Token`；請使用 `multipart/form-data`，圖片檔案欄位名稱固定為 `image`。上傳成功後會回傳圖片 `url`。
 - 受保護 API 使用 `portfolio_auth` HttpOnly cookie；除了 login／logout 外，前端寫入請求也必須帶 `X-CSRF-Token`，其值需等於 `portfolio_csrf` cookie。不要把 JWT 讀入 `localStorage` 或手動放入 `Authorization` header。
 

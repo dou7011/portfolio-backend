@@ -136,6 +136,8 @@ X-CSRF-Token: <portfolio_csrf cookie value>
 | POST | `/api/articles` | Yes | `articles:write` | 新增文章 |
 | PUT | `/api/articles/:id` | Yes | `articles:write` | 更新文章 |
 | DELETE | `/api/articles/:id` | Yes | `articles:delete` | 刪除文章 |
+| POST | `/api/upload` | Yes | `articles:write` | 上傳圖片，multipart 欄位為 `image` |
+| GET | `/api/upload/images/:yearMonth/:filename` | No | No | 取得上傳圖片 |
 
 ## 6. 資料型別
 
