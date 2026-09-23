@@ -20,6 +20,7 @@ export type AppBindings = {
   JWT_ISSUER: string;
   JWT_AUDIENCE: string;
   ALLOWED_ORIGINS: string;
+  CDN_URL: string;
 }
 
 /**

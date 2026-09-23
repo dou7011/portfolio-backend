@@ -20,7 +20,8 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://portfolio-frontend-4fl.pages.dev,https://hotailin.com",
     "JWT_ISSUER": "hotailin-portfolio-backend",
-    "JWT_AUDIENCE": "hotailin-portfolio-frontend"
+    "JWT_AUDIENCE": "hotailin-portfolio-frontend",
+    "CDN_URL": "https://cdn.hotailin.com"
   },
   "unsafe": {
     "bindings": [

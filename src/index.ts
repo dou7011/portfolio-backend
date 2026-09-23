@@ -11,6 +11,7 @@ import usersApp from './modules/users/users.route'
 import rolesApp from './modules/roles/roles.route'
 import permissionsApp from './modules/permissions/permissions.route'
 import articlesApp from './modules/articles/articles.route'
+import uploadApp from './modules/upload/upload.route'
 import type { AppEnv } from './types'
 import { csrfGuard } from './middleware/csrfGuard'
 
@@ -50,5 +51,6 @@ app.route('/api/users', usersApp)
 app.route('/api/roles', rolesApp)
 app.route('/api/permissions', permissionsApp)
 app.route('/api/articles', articlesApp)
+app.route('/api/upload', uploadApp)
 
 export default app
