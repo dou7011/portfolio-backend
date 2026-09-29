@@ -12,6 +12,13 @@ export interface ArticlePayload {
   github_url?: string;
   demo_url?: string;
   is_published?: boolean;
+  galleryImages?: GalleryImagePayload[];
+}
+// 圖片集
+export interface GalleryImagePayload {
+  url: string;
+  label: string;
+  sort_order?: number;
 }
 
 export interface AggregationMetaData {
@@ -295,9 +302,21 @@ export const getArticleBySlugService = async (
   const result = await db.prepare(query).bind(slug).first();
 
   if (result) {
+    // 1. 解析 Tags
     let parsedTags = JSON.parse(result.tags as string);
     if (parsedTags.length === 1 && parsedTags[0] === null) parsedTags = [];
     result.tags = parsedTags;
+
+    // 2. 取得關聯的圖片集 (依據 sort_order 排序)
+    const { results: images } = await db.prepare(`
+      SELECT url, label, sort_order 
+      FROM article_images 
+      WHERE article_id = ? 
+      ORDER BY sort_order ASC
+    `).bind(result.id).all();
+    
+    // 將撈出來的圖片陣列掛載到 result 上
+    result.galleryImages = images || [];
   }
   
   return result;
