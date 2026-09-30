@@ -1011,7 +1011,19 @@ Request body：
   "tags": ["tag1", "tag2"],
   "github_url": "https://github.com/...",
   "demo_url": "https://demo.com/...",
-  "is_published": true
+  "is_published": true,
+  "galleryImages": [
+    {
+      "url": "https://example.com/screenshots/dashboard.png",
+      "label": "管理後台首頁",
+      "sort_order": 0
+    },
+    {
+      "url": "https://example.com/screenshots/editor.png",
+      "label": "文章編輯畫面",
+      "sort_order": 1
+    }
+  ]
 }
 ```
 
@@ -1027,6 +1039,9 @@ Request body：
 - `github_url`: 可選，GitHub 連結
 - `demo_url`: 可選，示範連結
 - `is_published`: 可選，是否發布，預設 false
+- `galleryImages`: 可選，文章底部圖片集；每項必須有非空 `url`（最多 2048 字元），`label` 可省略（最多 200 字元），`sort_order` 可省略但若提供必須是非負整數；未提供排序時依陣列索引排序。查詢結果依 `sort_order` 遞增，相同值依建立順序排列
+
+建立成功的 `data` 會包含 `galleryImages` 陣列，元素格式為 `{ "url": "...", "label": "...", "sort_order": 0 }`。
 
 成功回應 `200 OK`：
 
@@ -1040,6 +1055,13 @@ Request body：
     "title": "My New Article",
     "type": "article",
     "content": "Article content...",
+    "galleryImages": [
+      {
+        "url": "https://example.com/screenshots/dashboard.png",
+        "label": "管理後台首頁",
+        "sort_order": 0
+      }
+    ],
     "is_published": true,
     "created_at": "2026-01-01T00:00:00Z"
   }
@@ -1073,13 +1095,20 @@ Request body：
   "title": "Updated Article",
   "type": "article",
   "content": "Updated content...",
-  "is_published": true
+  "is_published": true,
+  "galleryImages": [
+    {
+      "url": "https://example.com/screenshots/dashboard.png",
+      "label": "管理後台首頁",
+      "sort_order": 0
+    }
+  ]
 }
 ```
 
-欄位說明：目前實作要求送出完整文章 payload。缺少的選填欄位會被寫成 `NULL`，缺少 `is_published` 會被視為 `false`；`slug`、`title`、`type`、`content` 應一併提供，否則可能造成資料庫錯誤。
+欄位說明：目前實作要求送出完整文章 payload。缺少的選填文章欄位會被寫成 `NULL`，缺少 `is_published` 會被視為 `false`；`slug`、`title`、`type`、`content` 應一併提供，否則可能造成資料庫錯誤。`galleryImages` 若省略會保留現有圖片；傳入 `[]` 會清空圖片集；傳入陣列會取代原有圖片。每項的 `label`、`sort_order` 規則與 POST 相同，省略 `sort_order` 時依陣列索引排序。
 
-更新成功時會回傳完整的文章資料；SQLite 的布林欄位實際以 `0` 或 `1` 回傳，`tags` 會回傳陣列。
+更新成功時會回傳完整的文章資料與資料庫目前保存的 `galleryImages`；SQLite 的布林欄位實際以 `0` 或 `1` 回傳，`tags` 會回傳陣列。
 
 成功回應 `200 OK`：
 
@@ -1098,6 +1127,13 @@ Request body：
     "github_url": null,
     "demo_url": null,
     "tags": [],
+    "galleryImages": [
+      {
+        "url": "https://example.com/screenshots/dashboard.png",
+        "label": "管理後台首頁",
+        "sort_order": 0
+      }
+    ],
     "is_published": 1,
     "published_at": "2026-01-01T12:00:00Z",
     "created_at": "2026-01-01T00:00:00Z",

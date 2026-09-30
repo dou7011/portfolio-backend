@@ -12,6 +12,13 @@ export interface ArticlePayload {
   github_url?: string;
   demo_url?: string;
   is_published?: boolean;
+  galleryImages?: GalleryImagePayload[];
+}
+// 圖片集
+export interface GalleryImagePayload {
+  url: string;
+  label?: string;
+  sort_order?: number;
 }
 
 export interface AggregationMetaData {
@@ -30,6 +37,17 @@ const META_CACHE_VERSION_URL = new Request(
 const META_CACHE_TTL_SECONDS = 900;
 
 const getMetaCache = () => (caches as any).default as Cache;
+
+const getArticleGalleryImages = async (db: D1Database, articleId: number | string) => {
+  const { results } = await db.prepare(`
+    SELECT url, label, sort_order
+    FROM article_images
+    WHERE article_id = ?
+    ORDER BY sort_order ASC, id ASC
+  `).bind(articleId).all();
+
+  return results || [];
+};
 
 const getMetaCacheVersion = async (c: Context | undefined) => {
   const cache = getMetaCache();
@@ -295,9 +313,14 @@ export const getArticleBySlugService = async (
   const result = await db.prepare(query).bind(slug).first();
 
   if (result) {
+    // 1. 解析 Tags
     let parsedTags = JSON.parse(result.tags as string);
     if (parsedTags.length === 1 && parsedTags[0] === null) parsedTags = [];
     result.tags = parsedTags;
+
+    // 2. 取得關聯的圖片集 (依據 sort_order 排序)
+    // 將撈出來的圖片陣列掛載到 result 上
+    result.galleryImages = await getArticleGalleryImages(db, result.id as number);
   }
   
   return result;
@@ -368,12 +391,32 @@ export const createArticleService = async (db: D1Database, payload: ArticlePaylo
     await syncArticleTags(db, Number(article.id), normalizedTags);
   }
 
-  // 將傳入的 tags 補回結果中方便前端顯示
-  return { ...article, tags: normalizedTags };
+  // 3. 處理圖片集寫入 (使用 D1 Batch)
+  const galleryImages = payload.galleryImages || [];
+  if (article && galleryImages.length > 0) {
+    const statements = galleryImages.map((img, index) => {
+      // 若前端未傳遞排序，則預設使用陣列索引
+      const sortOrder = img.sort_order ?? index; 
+      const label = img.label || '';
+      
+      return db.prepare(
+        `INSERT INTO article_images (article_id, url, label, sort_order) VALUES (?, ?, ?, ?)`
+      ).bind(article.id, img.url, label, sortOrder);
+    });
+
+    await db.batch(statements);
+  }
+
+  const savedGalleryImages = article
+    ? await getArticleGalleryImages(db, article.id as number)
+    : [];
+
+  // 回傳資料庫實際保存的排序與標籤值
+  return { ...article, tags: normalizedTags, galleryImages: savedGalleryImages };
 };
 
 /**
- * 更新文章內容
+- 更新文章內容
  */
 export const updateArticleService = async (db: D1Database, id: string, payload: ArticlePayload) => {
   const query = `
@@ -416,7 +459,39 @@ export const updateArticleService = async (db: D1Database, id: string, payload: 
     await syncArticleTags(db, Number(article.id), normalizedTags);
   }
 
-  return { ...article, tags: normalizedTags };
+  // 3. 更新圖片集 (先刪除舊關聯，再新增傳入的新圖)
+  if (payload.galleryImages !== undefined) {
+    const statements = [];
+    
+    // 刪除該文章原有的所有圖片集記錄
+    statements.push(
+      db.prepare(`DELETE FROM article_images WHERE article_id = ?`).bind(id)
+    );
+
+    // 重新建立圖片記錄
+    payload.galleryImages.forEach((img, index) => {
+      const sortOrder = img.sort_order ?? index;
+      const label = img.label || '';
+      
+      statements.push(
+        db.prepare(
+          `INSERT INTO article_images (article_id, url, label, sort_order) VALUES (?, ?, ?, ?)`
+        ).bind(id, img.url, label, sortOrder)
+      );
+    });
+
+    // 透過 Batch 確保交易完整性 (Transaction)
+    await db.batch(statements);
+  }
+
+  const savedGalleryImages = await getArticleGalleryImages(db, article.id as number);
+
+  // 未傳 galleryImages 時保留舊圖，並回傳目前資料庫內容
+  return { 
+    ...article, 
+    tags: normalizedTags, 
+    galleryImages: savedGalleryImages
+  };
 };
 
 /**

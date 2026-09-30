@@ -110,6 +110,19 @@ CREATE TABLE IF NOT EXISTS article_tags (
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS article_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    label TEXT,              -- 圖片標籤
+    sort_order INTEGER DEFAULT 0, -- 控制輪播圖的順序
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+);
+
+-- 建立索引以加快文章查詢時關聯圖片的速度
+CREATE INDEX IF NOT EXISTS idx_article_images_article_id ON article_images(article_id);
+
 -- 建立索引加速查詢
 CREATE INDEX IF NOT EXISTS idx_articles_type ON articles(type);
 CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(is_published, published_at DESC);
