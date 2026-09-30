@@ -177,7 +177,12 @@ const isValidArticlePayload = (body: Partial<ArticlePayload>): body is ArticlePa
     hasValidOptionalString(body.demo_url, 255) &&
     (body.is_published === undefined || typeof body.is_published === 'boolean') &&
     (body.tags === undefined || (Array.isArray(body.tags) && body.tags.length <= 10 &&
-      body.tags.every(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.trim().length <= 50)))
+      body.tags.every(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.trim().length <= 50))) &&
+    (body.galleryImages === undefined || (Array.isArray(body.galleryImages) &&
+      body.galleryImages.every(image => image !== null && typeof image === 'object' &&
+        typeof image.url === 'string' && image.url.trim().length > 0 && image.url.length <= 2_048 &&
+        (image.label === undefined || (typeof image.label === 'string' && image.label.length <= 200)) &&
+        (image.sort_order === undefined || (Number.isInteger(image.sort_order) && image.sort_order >= 0)))))
 }
 
 /**

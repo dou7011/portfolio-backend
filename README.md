@@ -91,6 +91,7 @@ portfolio-backend/
 - 履歷讀取與更新
 - 使用者 / 角色 / 權限 CRUD
 - 文章與作品內容 CRUD，支持分頁、類型/標籤/時間區間過濾與分類/標籤聚合統計
+- 文章圖片集 `galleryImages`，每張圖片可設定 `label` 與 `sort_order`
 - 公開文章列表與 slug 查詢
 - 圖片上傳至 R2 與公開圖片讀取端點
 - RBAC 權限 guard

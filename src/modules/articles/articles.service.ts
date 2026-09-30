@@ -17,7 +17,7 @@ export interface ArticlePayload {
 // 圖片集
 export interface GalleryImagePayload {
   url: string;
-  label: string;
+  label?: string;
   sort_order?: number;
 }
 
@@ -37,6 +37,17 @@ const META_CACHE_VERSION_URL = new Request(
 const META_CACHE_TTL_SECONDS = 900;
 
 const getMetaCache = () => (caches as any).default as Cache;
+
+const getArticleGalleryImages = async (db: D1Database, articleId: number | string) => {
+  const { results } = await db.prepare(`
+    SELECT url, label, sort_order
+    FROM article_images
+    WHERE article_id = ?
+    ORDER BY sort_order ASC, id ASC
+  `).bind(articleId).all();
+
+  return results || [];
+};
 
 const getMetaCacheVersion = async (c: Context | undefined) => {
   const cache = getMetaCache();
@@ -308,15 +319,8 @@ export const getArticleBySlugService = async (
     result.tags = parsedTags;
 
     // 2. 取得關聯的圖片集 (依據 sort_order 排序)
-    const { results: images } = await db.prepare(`
-      SELECT url, label, sort_order 
-      FROM article_images 
-      WHERE article_id = ? 
-      ORDER BY sort_order ASC
-    `).bind(result.id).all();
-    
     // 將撈出來的圖片陣列掛載到 result 上
-    result.galleryImages = images || [];
+    result.galleryImages = await getArticleGalleryImages(db, result.id as number);
   }
   
   return result;
@@ -403,8 +407,12 @@ export const createArticleService = async (db: D1Database, payload: ArticlePaylo
     await db.batch(statements);
   }
 
-  // 將傳入的 tags 與 galleryImages 補回結果中方便前端顯示
-  return { ...article, tags: normalizedTags, galleryImages };
+  const savedGalleryImages = article
+    ? await getArticleGalleryImages(db, article.id as number)
+    : [];
+
+  // 回傳資料庫實際保存的排序與標籤值
+  return { ...article, tags: normalizedTags, galleryImages: savedGalleryImages };
 };
 
 /**
@@ -476,11 +484,13 @@ export const updateArticleService = async (db: D1Database, id: string, payload: 
     await db.batch(statements);
   }
 
-  // 將 tags 與最終更新的 galleryImages 一併回傳
+  const savedGalleryImages = await getArticleGalleryImages(db, article.id as number);
+
+  // 未傳 galleryImages 時保留舊圖，並回傳目前資料庫內容
   return { 
     ...article, 
     tags: normalizedTags, 
-    galleryImages: payload.galleryImages || [] 
+    galleryImages: savedGalleryImages
   };
 };
 
