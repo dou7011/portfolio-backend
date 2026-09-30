@@ -132,6 +132,8 @@ CDN_URL=http://localhost:8787/api/upload
 
 `ALLOWED_ORIGINS` 可用逗號分隔多個來源。`CDN_URL` 是上傳成功後回傳的圖片網址前綴；本機建議設定為 API 的公開讀取路由。正式環境可設定為綁定 R2 的自訂網域，或設為 `https://api.hotailin.com/api/upload` 使用 Worker 讀取端點。不要把 `JWT_SECRET` 寫入 `wrangler.jsonc` 或提交 `.dev.vars`。
 
+本機 Wrangler 開發使用 `.dev.vars` 中的本機來源與網址；部署環境則使用 `wrangler.jsonc` 的 `vars` 或 Cloudflare Dashboard 設定。請分別確認各環境的 `ALLOWED_ORIGINS` 都包含實際前端來源，且 `CDN_URL` 指向可公開讀取上傳物件的網址前綴。
+
 ### 5. 建立本機登入帳號
 
 `seed.sql` 不會建立使用者，第一次啟動前請先產生密碼雜湊：
@@ -216,7 +218,7 @@ npm run deploy
 | `DELETE` | `/api/roles/:id` | 刪除角色 |
 | `GET` | `/api/permissions` | 取得權限列表 |
 | `GET` | `/api/articles` | 取得文章 / 作品列表；`is_published` 省略時預設為 `1`，具 `articles:write` 可查詢 `0`、`1`、`false`、`true`（支持分頁） |
-| `GET` | `/api/articles/:slug` | 依 slug 取得文章內容；具 `articles:write` 可讀草稿 |
+| `GET` | `/api/articles/:slug` | 公開讀取已發布文章；可選 cookie 認證，具 `articles:write` 可讀草稿 |
 | `POST` | `/api/articles` | 建立文章 / 作品 |
 | `PUT` | `/api/articles/:id` | 更新文章 / 作品 |
 | `DELETE` | `/api/articles/:id` | 刪除文章 / 作品 |
@@ -254,7 +256,7 @@ npm run deploy
 - CORS 依 `ALLOWED_ORIGINS` 白名單限制來源。
 - 不要將 `.dev.vars` 或實際機密提交至版本控制。
 - `npm run deploy` 只部署 Worker，不會自動執行 D1 schema 或 seed。
-- `GET /api/articles` 與 `GET /api/articles/:slug` 對外公開已發布內容；帶有效 auth cookie 且具備 `articles:write` 權限時，可查詢草稿。文章列表的 `is_published` 可使用 `0`、`1`、`false`、`true`，省略時預設為 `1`；無此權限時固定為 `1`。
+- `GET /api/articles` 與 `GET /api/articles/:slug` 可匿名讀取已發布內容；帶有效 auth cookie 且具備 `articles:write` 權限時，可查詢草稿。文章列表的 `is_published` 可使用 `0`、`1`、`false`、`true`，省略時預設為 `1`；無此權限時固定為 `1`。若請求帶有無效 auth cookie，optional auth 仍會回傳 `401`。
 - `POST /api/upload` 需要登入、`articles:write` 權限與 `X-CSRF-Token`；請使用 `multipart/form-data`，圖片檔案欄位名稱固定為 `image`。上傳成功後會回傳圖片 `url`。
 - 受保護 API 使用 `portfolio_auth` HttpOnly cookie；除了 login／logout 外，前端寫入請求也必須帶 `X-CSRF-Token`，其值需等於 `portfolio_csrf` cookie。不要把 JWT 讀入 `localStorage` 或手動放入 `Authorization` header。
 

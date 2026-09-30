@@ -39,6 +39,7 @@
 - `BAD_REQUEST`: 缺少必要欄位、參數不合法
 - `UNAUTHORIZED`: 未登入、Token 缺失、Token 無效或過期
 - `FORBIDDEN`: 已登入但權限不足，或帳號被停用
+- `TOO_MANY_REQUESTS`: 登入來源 IP 超過速率限制（HTTP 429）
 - `ACCOUNT_LOCKED`: 登入失敗達到上限，帳號暫時鎖定
 - `CSRF_FAILED`: 寫入請求缺少或帶有不相符的 CSRF token
 - `NOT_FOUND`: 查無資料
@@ -51,7 +52,7 @@
 
 ### 3.1 Cookie 認證
 
-登入成功後，後端會設定兩個 cookie：
+登入成功後，後端會設定兩個 cookie，效期皆為 8 小時。HTTPS 使用 `Secure; SameSite=None`，HTTP 本機開發使用 `SameSite=Lax`；`portfolio_auth` 設為 HttpOnly，`portfolio_csrf` 可由前端讀取：
 
 ```http
 Set-Cookie: portfolio_auth=<jwt>; HttpOnly; Path=/; Max-Age=28800
@@ -60,7 +61,7 @@ Set-Cookie: portfolio_csrf=<random-value>; Path=/; Max-Age=28800
 
 所有受保護的 API 都由瀏覽器自動帶上 `portfolio_auth`。前端不應讀取 JWT、將 JWT 存入 `localStorage`，或自行建立 `Authorization` header。
 
-`portfolio_csrf` 不含登入憑證。除了 login／logout 外，所有 `POST`、`PUT`、`PATCH`、`DELETE` 請求都必須額外帶上：
+`portfolio_csrf` 不含登入憑證。除了 login／logout 外，目前所有 `POST`、`PUT`、`DELETE` 寫入請求都必須額外帶上：
 
 ```http
 X-CSRF-Token: <portfolio_csrf cookie value>
@@ -257,7 +258,7 @@ X-CSRF-Token: <portfolio_csrf cookie value>
 
 ```json
 {
-  "id": "1",
+  "id": 1,
   "slug": "my-article",
   "title": "My Article",
   "type": "article",
@@ -268,14 +269,21 @@ X-CSRF-Token: <portfolio_csrf cookie value>
   "github_url": "https://github.com/...",
   "demo_url": "https://demo.com/...",
   "view_count": 100,
-  "is_published": true,
+  "is_published": 1,
   "published_at": "2026-01-01T00:00:00Z",
   "created_at": "2026-01-01T00:00:00Z",
-  "updated_at": "2026-01-01T00:00:00Z"
+  "updated_at": "2026-01-01T00:00:00Z",
+  "galleryImages": [
+    {
+      "url": "https://example.com/screenshots/dashboard.png",
+      "label": "管理後台首頁",
+      "sort_order": 0
+    }
+  ]
 }
 ```
 
-注意：request 的 `is_published` 可使用 boolean，service 會轉成 SQLite 的 `0/1`；response 實際回傳通常是 `0/1`。`published_at`、`created_at` 與 `updated_at` 會依 SQLite/D1 回傳 datetime 字串，前端不要假設一定帶有 `T` 與 `Z`。
+注意：request 的 `is_published` 必須是 boolean；response 的 SQLite 整數欄位以 `0` 或 `1` 回傳，`id` 為數字。單篇查詢另外包含 `galleryImages`。時間欄位格式依寫入路徑與 SQLite/D1 回傳而異，不保證一定帶有 `T` 與 `Z`；列表項目不包含 `content`、`created_at` 或 `updated_at`。
 
 ### 6.7 Pagination & Aggregations
 
@@ -411,11 +419,16 @@ Request body:
       "roles:read",
       "roles:write",
       "roles:delete",
+      "articles:write",
+      "articles:delete",
       "permissions:read"
-    ]
+    ],
+    "csrfToken": "<portfolio_csrf cookie value>"
   }
 }
 ```
+
+`csrfToken` 會在 CSRF cookie 存在時回傳；若 cookie 不存在，回應中會省略此欄位。
 
 可能錯誤：
 
@@ -631,12 +644,12 @@ Request body:
 
 欄位說明：
 
-- `email`: 必填，需唯一
-- `password`: 必填
+- `email`: 必填，需符合 email 格式且唯一
+- `password`: 必填，至少 8 字元
 - `isActive`: 必填，`1` 或 `0`
-- `roleIds`: 可選，角色 ID 陣列
+- `roleIds`: 可選，正整數角色 ID 陣列
 
-成功回應：
+成功回應 `201 Created`：
 
 ```json
 {
@@ -671,7 +684,7 @@ Request body:
 欄位說明：
 
 - `isActive`: 必填，`1` 或 `0`
-- `password`: 可選，若提供且非空字串才會更新
+- `password`: 可選；若提供，至少 8 字元
 - `roleIds`: 可選，若有值會全量覆寫使用者角色綁定
 
 成功回應：
@@ -688,6 +701,7 @@ Request body:
 - `400 BAD_REQUEST`: 缺少 `isActive`
 - `401 UNAUTHORIZED`
 - `403 FORBIDDEN`
+- `404 NOT_FOUND`: 查無使用者
 - `500 INTERNAL_ERROR`
 
 ### 10.5 DELETE /api/users/:id
@@ -709,6 +723,7 @@ Request body:
 - `400 BAD_REQUEST`: 缺少 `id`
 - `401 UNAUTHORIZED`
 - `403 FORBIDDEN`
+- `404 NOT_FOUND`: 查無使用者
 - `500 INTERNAL_ERROR`
 
 ## 11. E. Roles
@@ -790,9 +805,9 @@ Request body:
 
 - `name`: 必填，角色名稱需唯一
 - `description`: 可選
-- `permissionIds`: 可選，權限 ID 陣列
+- `permissionIds`: 可選，正整數權限 ID 陣列
 
-成功回應：
+成功回應 `201 Created`：
 
 ```json
 {
@@ -824,6 +839,8 @@ Request body:
 }
 ```
 
+欄位說明：`name` 必填且不可為空白；`description` 可選；`permissionIds` 可選，若提供須為正整數陣列，並會全量覆寫該角色的權限綁定。
+
 成功回應：
 
 ```json
@@ -838,6 +855,7 @@ Request body:
 - `400 BAD_REQUEST`: 缺少 `id` 或 `name`
 - `401 UNAUTHORIZED`
 - `403 FORBIDDEN`
+- `404 NOT_FOUND`: 查無角色
 - `409 CONFLICT`: 名稱與其他角色衝突
 - `500 INTERNAL_ERROR`
 
@@ -860,6 +878,7 @@ Request body:
 - `400 BAD_REQUEST`: 缺少 `id`
 - `401 UNAUTHORIZED`
 - `403 FORBIDDEN`
+- `404 NOT_FOUND`: 查無角色
 - `500 INTERNAL_ERROR`
 
 ## 12. G. Articles
@@ -874,14 +893,16 @@ Request body:
 Query Parameters:
 
 - `page`: 可選，頁碼，預設 `1`
-- `pageSize`: 可選，每頁文章數，預設 `10`，最多 `100`
+- `pageSize`: 可選，每頁文章數，預設 `10`，範圍 `1` 至 `100`
 - `type`: 可選，文章類型過濾 (例如：`blog`, `project`)
 - `tag`: 可選，標籤名稱過濾 (例如：`Frontend`, `Vue.js`)
 - `is_published`: 可選，發布狀態，可使用 `0`、`1`、`false`、`true`（也就是對應的字串 `'0'`、`'1'`、`'false'`、`'true'`）
 - `startTime`: 可選，發布時間下限（含），ISO 8601 格式，例如 `2026-01-01T00:00:00Z`
 - `endTime`: 可選，發布時間上限（含），ISO 8601 格式，例如 `2026-12-31T23:59:59Z`
 
-未登入或沒有 `articles:write` 權限時，`is_published` 固定為 `1`；具備權限時可使用 `is_published=0` 查詢草稿或 `is_published=1` 查詢已發布，省略時預設為 `1`。`true` 等同於 `1`，`false` 等同於 `0`；傳入其他值會回傳 `400 BAD_REQUEST`。其他 query 參數採寬鬆解析：`type` 沒有固定值域；`tag` 透過 `article_tags`/`tags` 關聯表精確比對標籤名稱（區分大小寫，非 LIKE 模糊比對）；`page`、`pageSize` 傳入非數字值時不一定回傳 `400`。
+未登入或沒有 `articles:write` 權限時，`is_published` 固定為 `1`，不會驗證該參數；具備權限時可使用 `is_published=0` 查詢草稿或 `is_published=1` 查詢已發布，省略時預設為 `1`。有權限且傳入其他值會回傳 `400 BAD_REQUEST`。其他 query 參數採寬鬆解析：`type` 沒有固定值域；`tag` 透過 `article_tags`/`tags` 關聯表精確比對標籤名稱（區分大小寫，非 LIKE 模糊比對）；`page`、`pageSize` 以整數前綴解析，請傳入有效正整數，非數字值沒有明確的 `400` 驗證。
+
+沒有 cookie 時可匿名查詢已發布內容；若帶有無效或過期 cookie，optional auth 會回傳 `401 UNAUTHORIZED`，不會降級成匿名請求。
 
 範例：
 - `GET /api/articles?page=1&pageSize=10&type=blog&tag=Vue.js`
@@ -896,7 +917,7 @@ Query Parameters:
   "data": {
     "data": [
       {
-        "id": "1",
+        "id": 1,
         "slug": "my-article",
         "title": "My Article",
         "type": "blog",
@@ -955,6 +976,8 @@ Query Parameters:
 - 認證: 可選；帶有效 `portfolio_auth` cookie 時會依使用者權限決定是否可查詢草稿
 - 權限: `articles:write`（可選），用於查看未發布文章
 
+沒有 cookie 時可匿名查詢已發布內容；若帶有無效或過期 cookie，optional auth 會回傳 `401 UNAUTHORIZED`，不會降級成匿名請求。
+
 未登入或沒有 `articles:write` 權限時，只能取得 `is_published=1` 的文章；具備 `articles:write` 權限時，可取得同 slug 的草稿文章。
 
 Path Params:
@@ -967,7 +990,7 @@ Path Params:
 {
   "success": true,
   "data": {
-    "id": "1",
+    "id": 1,
     "slug": "my-article",
     "title": "My Article",
     "type": "article",
@@ -978,10 +1001,17 @@ Path Params:
     "github_url": "https://github.com/...",
     "demo_url": "https://demo.com/...",
     "view_count": 100,
-    "is_published": true,
+    "is_published": 1,
     "published_at": "2026-01-01T00:00:00Z",
     "created_at": "2026-01-01T00:00:00Z",
-    "updated_at": "2026-01-01T00:00:00Z"
+    "updated_at": "2026-01-01T00:00:00Z",
+    "galleryImages": [
+      {
+        "url": "https://example.com/screenshots/dashboard.png",
+        "label": "管理後台首頁",
+        "sort_order": 0
+      }
+    ]
   }
 }
 ```
@@ -1029,16 +1059,17 @@ Request body：
 
 欄位說明：
 
-- `slug`: 必填，唯一識別符
-- `title`: 必填，文章標題
-- `type`: 必填，文章類型
-- `content`: 必填，文章內容
+- `slug`: 必填，唯一識別符；限小寫英數字與單一連字號分隔，最多 100 字元
+- `title`: 必填，非空白，最多 200 字元
+- `type`: 必填，非空白，最多 50 字元
+- `content`: 必填，非空白，最多 100,000 字元
 - `cover_image`: 可選，封面圖片 URL
 - `excerpt`: 可選，文章摘要
-- `tags`: 可選，標籤陣列
-- `github_url`: 可選，GitHub 連結
-- `demo_url`: 可選，示範連結
+- `tags`: 可選，最多 10 個非空標籤，每個最多 50 字元
+- `github_url`: 可選，最多 255 字元
+- `demo_url`: 可選，最多 255 字元
 - `is_published`: 可選，是否發布，預設 false
+- `cover_image`: 最多 255 字元；`excerpt` 最多 2,000 字元
 - `galleryImages`: 可選，文章底部圖片集；每項必須有非空 `url`（最多 2048 字元），`label` 可省略（最多 200 字元），`sort_order` 可省略但若提供必須是非負整數；未提供排序時依陣列索引排序。查詢結果依 `sort_order` 遞增，相同值依建立順序排列
 
 建立成功的 `data` 會包含 `galleryImages` 陣列，元素格式為 `{ "url": "...", "label": "...", "sort_order": 0 }`。
@@ -1050,7 +1081,7 @@ Request body：
   "success": true,
   "message": "文章建立成功",
   "data": {
-    "id": "1",
+    "id": 1,
     "slug": "my-new-article",
     "title": "My New Article",
     "type": "article",
@@ -1062,7 +1093,7 @@ Request body：
         "sort_order": 0
       }
     ],
-    "is_published": true,
+    "is_published": 1,
     "created_at": "2026-01-01T00:00:00Z"
   }
 }
@@ -1070,7 +1101,7 @@ Request body：
 
 可能錯誤：
 
-- `400 BAD_REQUEST`: 缺少必填欄位（slug, title, content）
+- `400 BAD_REQUEST`: JSON 無效或欄位格式/長度不符合限制（必填欄位為 `slug`、`title`、`type`、`content`）
 - `401 UNAUTHORIZED`: 未提供 Token
 - `403 FORBIDDEN`: 無 `articles:write` 權限
 - `409 CONFLICT`: slug 已存在
@@ -1106,7 +1137,7 @@ Request body：
 }
 ```
 
-欄位說明：目前實作要求送出完整文章 payload。缺少的選填文章欄位會被寫成 `NULL`，缺少 `is_published` 會被視為 `false`；`slug`、`title`、`type`、`content` 應一併提供，否則可能造成資料庫錯誤。`galleryImages` 若省略會保留現有圖片；傳入 `[]` 會清空圖片集；傳入陣列會取代原有圖片。每項的 `label`、`sort_order` 規則與 POST 相同，省略 `sort_order` 時依陣列索引排序。
+欄位說明：目前實作要求送出完整文章 payload；缺少 `slug`、`title`、`type` 或 `content` 會回傳 `400 BAD_REQUEST`。缺少的選填文章欄位會被寫成 `NULL`，缺少 `is_published` 會被視為 `false`；省略 `tags` 會清空原標籤。`galleryImages` 若省略會保留現有圖片；傳入 `[]` 會清空圖片集；傳入陣列會取代原有圖片。每項的 `label`、`sort_order` 規則與 POST 相同，省略 `sort_order` 時依陣列索引排序。
 
 更新成功時會回傳完整的文章資料與資料庫目前保存的 `galleryImages`；SQLite 的布林欄位實際以 `0` 或 `1` 回傳，`tags` 會回傳陣列。
 
@@ -1117,7 +1148,7 @@ Request body：
   "success": true,
   "message": "文章更新成功",
   "data": {
-    "id": "1",
+    "id": 1,
     "slug": "updated-article",
     "title": "Updated Article",
     "type": "article",
@@ -1207,10 +1238,38 @@ Path Params:
 - `403 FORBIDDEN`
 - `500 INTERNAL_ERROR`
 
+### 13.2 Upload
+
+#### POST /api/upload
+
+- 認證：必須帶 `portfolio_auth` cookie；另需 `X-CSRF-Token`
+- 權限：`articles:write`
+- Content-Type：`multipart/form-data`
+- 必填檔案欄位：`image`
+
+檔案會存入 R2，成功回應為 `200 OK`，`data.url` 為 `${CDN_URL}/images/YYYYMM/<id>.<副檔名>`：
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://cdn.example.com/images/202609/a1b2c3d4.png"
+  }
+}
+```
+
+目前 controller 未驗證檔案 MIME type、大小或內容；呼叫端應自行限制上傳內容。缺少有效檔案回傳 `400 BAD_REQUEST`；CSRF 驗證失敗回傳 `403 CSRF_FAILED`；缺少 `articles:write` 回傳 `403 FORBIDDEN`；R2 寫入失敗回傳 `500 INTERNAL_ERROR`。
+
+#### GET /api/upload/images/:yearMonth/:filename
+
+- 認證：無；權限：無
+- 成功時直接回傳圖片 binary 與物件 HTTP metadata，不使用統一 JSON envelope
+- 查無圖片時回傳 `404`
+
 ## 14. 前端串接提醒
 
 - 除了公開端點以外，其餘 API 都需要由瀏覽器帶上 `portfolio_auth` cookie；除了 login／logout 外，所有寫入請求還需要 `X-CSRF-Token`。
-- 有 request body 的請求請附帶 `Content-Type: application/json`。
+- JSON request body 請附帶 `Content-Type: application/json`；`POST /api/upload` 使用 `multipart/form-data`，由瀏覽器自行設定 boundary。
 - 使用者 API 的 request body 使用 `isActive`，response 則是 `is_active`。
 - 角色與權限綁定請使用 `roleIds` 與 `permissionIds`。
 - 當前後端沒有 refresh token 與 Swagger/OpenAPI 文件；已提供 `POST /api/auth/logout`。
@@ -1831,7 +1890,7 @@ Path Params:
 - 沒有 refresh token 機制
 - 已提供 `POST /api/auth/logout`，但沒有 refresh token 機制
 - 沒有分頁、搜尋、排序 query
-- 沒有欄位級 schema validation
+- 沒有集中式 schema validation；各 controller 僅驗證其實際實作的欄位與條件
 - 沒有 OpenAPI / Swagger 文件
 
 ### 7.4 建議前端型別
