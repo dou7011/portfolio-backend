@@ -5,6 +5,7 @@ import { PERMISSIONS } from '../../constants/permissions';
 import { logger } from '../../utils/logger';
 import { fail, ok } from '../../utils/response';
 import { parseJsonBody } from '../../utils/parseJsonBody';
+import { isOptionalHttpUrl } from '../../utils/isHttpUrl';
 import {
   getArticlesService,
   getArticleBySlugService,
@@ -179,7 +180,9 @@ const isValidArticlePayload = (body: Partial<ArticlePayload>): body is ArticlePa
     hasValidOptionalString(body.cover_image, 255) &&
     hasValidOptionalString(body.excerpt, 2_000) &&
     hasValidOptionalString(body.github_url, 255) &&
+    isOptionalHttpUrl(body.github_url) &&
     hasValidOptionalString(body.demo_url, 255) &&
+    isOptionalHttpUrl(body.demo_url) &&
     (body.is_published === undefined || typeof body.is_published === 'boolean') &&
     (body.tags === undefined ||
       (Array.isArray(body.tags) &&

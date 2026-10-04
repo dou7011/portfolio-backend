@@ -5,6 +5,7 @@ import type { AppEnv } from '../../types'
 import { logger } from '../../utils/logger'
 import { fail, ok } from '../../utils/response'
 import { parseJsonBody } from '../../utils/parseJsonBody'
+import { isOptionalHttpUrl } from '../../utils/isHttpUrl'
 
 /**
  * 處理讀取履歷的 HTTP 請求與回應。
@@ -41,6 +42,16 @@ export const updateResumeController = async (c: Context<AppEnv>) => {
 
   if (!lang || !['en', 'zh'].includes(String(lang))) {
     return fail(c, 400, 'BAD_REQUEST', '語言參數無效 (必須是 "en" 或 "zh")')
+  }
+
+  const projectList = Array.isArray(projects) ? projects : []
+  const urlsValid =
+    isOptionalHttpUrl(github) &&
+    projectList.every(
+      (p: any) => p && typeof p === 'object' && isOptionalHttpUrl(p.githubUrl) && isOptionalHttpUrl(p.demoUrl),
+    )
+  if (!urlsValid) {
+    return fail(c, 400, 'BAD_REQUEST', '連結必須是 http:// 或 https:// 開頭的有效網址')
   }
 
   try {
