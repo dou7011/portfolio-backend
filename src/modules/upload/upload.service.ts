@@ -12,7 +12,10 @@ export const uploadImageService = async (bucket: R2Bucket, file: File) => {
   const key = createImageKey(file.name)
 
   await bucket.put(key, await file.arrayBuffer(), {
-    httpMetadata: { contentType: file.type },
+    httpMetadata: {
+      contentType: file.type,
+      cacheControl: 'public, max-age=2592000, immutable',
+     },
   })
 
   return key

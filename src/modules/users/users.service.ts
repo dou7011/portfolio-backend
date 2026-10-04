@@ -52,27 +52,21 @@ export const createUserService = async (db: D1Database, email: string, password:
   }
 
   const hashedPassword = await hashPassword(password)
-  const statements = [
-    db.prepare('INSERT INTO users (email, password_hash, is_active) VALUES (?, ?, ?) RETURNING id').bind(email, hashedPassword, isActive)
-  ]
 
-  if (Array.isArray(roleIds) && roleIds.length > 0) {
-    for (const roleId of roleIds) {
-      statements.push(db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').bind(0, roleId))
-    }
-  }
+  // 1. 先新增使用者並直接取得新產生的 id
+  const newUser = await db
+    .prepare('INSERT INTO users (email, password_hash, is_active) VALUES (?, ?, ?) RETURNING id')
+    .bind(email, hashedPassword, isActive)
+    .first<{ id: number }>()
 
-  const results = await db.batch(statements)
-  const insertResult = results[0] as any
-  const userId = insertResult?.results?.[0]?.id as number | undefined
-
-  if (!userId) {
+  if (!newUser?.id) {
     throw new Error('USER_CREATE_FAILED')
   }
 
+  // 2. 拿到真正的 newUser.id 後，再批次寫入角色關聯
   if (Array.isArray(roleIds) && roleIds.length > 0) {
     const roleStatements = roleIds.map(roleId =>
-      db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').bind(userId, roleId)
+      db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').bind(newUser.id, roleId)
     )
     await db.batch(roleStatements)
   }

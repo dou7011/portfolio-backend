@@ -23,7 +23,7 @@ export const loginController = async (c: Context<AppEnv>) => {
   }
 
   try {
-    const token = await loginUserService(
+    const { token, maxAge } = await loginUserService(
       c.env.DB,
       c.env.JWT_SECRET,
       c.env.JWT_ISSUER,
@@ -33,19 +33,20 @@ export const loginController = async (c: Context<AppEnv>) => {
     )
     const isSecure = new URL(c.req.url).protocol === 'https:'
     const sameSite = isSecure ? 'None' : 'Lax'
+
     setCookie(c, 'portfolio_auth', token, {
       httpOnly: true,
       secure: isSecure,
       sameSite,
       path: '/',
-      maxAge: 8 * 60 * 60,
+      maxAge,
     })
     const csrfToken = crypto.randomUUID()
     setCookie(c, 'portfolio_csrf', csrfToken, {
       secure: isSecure,
       sameSite,
       path: '/',
-      maxAge: 8 * 60 * 60,
+      maxAge,
     })
     return ok(c, { message: '登入成功', data: { csrfToken } })
   } catch (error: any) {

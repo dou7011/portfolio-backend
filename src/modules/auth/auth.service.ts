@@ -19,7 +19,7 @@ export const loginUserService = async (
   jwtAudience: string,
   email: string,
   pass: string
-): Promise<string> => {
+): Promise<{ token: string; maxAge: number }> => {
   // 1. 查詢帳號
   const { results } = await db.prepare(
     'SELECT * FROM users WHERE email = ? AND is_active = 1'
@@ -77,21 +77,25 @@ export const loginUserService = async (
 
   // 5. 簽發 JWT
   const nowMs = Date.now()
+  const nowSec = Math.floor(nowMs / 1000)
   const twTimeMs = nowMs + (8 * 60 * 60 * 1000)
   const twDate = new Date(twTimeMs)
   twDate.setUTCHours(24, 0, 0, 0)
+  
   const exp = Math.floor((twDate.getTime() - (8 * 60 * 60 * 1000)) / 1000)
+  const maxAge = Math.max(exp - nowSec, 1) // 確保至少大於 0 秒
 
   const payload = {
     iss: jwtIssuer,
     aud: jwtAudience,
-    iat: Math.floor(Date.now() / 1000),
-    nbf: Math.floor(Date.now() / 1000),
+    iat: nowSec,
+    nbf: nowSec,
     jti: crypto.randomUUID(),
     exp,
     id: Number(user.id),
     email: user.email,
   }
 
-  return sign(payload, jwtSecret, 'HS256')
+  const token = await sign(payload, jwtSecret, 'HS256')
+  return { token, maxAge }
 }

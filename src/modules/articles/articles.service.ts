@@ -1,5 +1,5 @@
-import type { D1Database } from '@cloudflare/workers-types';
-import type { Context } from 'hono';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
+import { safeJsonParse } from '../../utils/safeJsonParse';
 
 export interface ArticlePayload {
   slug: string;
@@ -14,6 +14,7 @@ export interface ArticlePayload {
   is_published?: boolean;
   galleryImages?: GalleryImagePayload[];
 }
+
 // 圖片集
 export interface GalleryImagePayload {
   url: string;
@@ -21,94 +22,37 @@ export interface GalleryImagePayload {
   sort_order?: number;
 }
 
-export interface AggregationMetaData {
-  totalFiltered: number;
-  aggregations: {
-    totalCategories: number;
-    totalTags: number;
-    categories: Array<{ name: string; count: number }>;
-    tags: Array<{ name: string; count: number }>;
-  };
-}
-
-const META_CACHE_VERSION_URL = new Request(
-  'https://portfolio-backend.internal/cache/meta-version'
-);
-const META_CACHE_TTL_SECONDS = 900;
-
-const getMetaCache = () => (caches as any).default as Cache;
-
-const getArticleGalleryImages = async (db: D1Database, articleId: number | string) => {
-  const { results } = await db.prepare(`
+const getArticleGalleryImagesStmt = (db: D1Database, articleId: number | string) => {
+  return db.prepare(`
     SELECT url, label, sort_order
     FROM article_images
     WHERE article_id = ?
     ORDER BY sort_order ASC, id ASC
-  `).bind(articleId).all();
+  `).bind(articleId);
+};
 
+const getArticleGalleryImages = async (db: D1Database, articleId: number | string) => {
+  const { results } = await getArticleGalleryImagesStmt(db, articleId).all();
   return results || [];
 };
 
-const getMetaCacheVersion = async (c: Context | undefined) => {
-  const cache = getMetaCache();
-  const cachedVersion = await cache.match(META_CACHE_VERSION_URL);
-  if (cachedVersion) return cachedVersion.text();
-
-  const version = crypto.randomUUID();
-  const versionResponse = new Response(version, {
-    headers: { 'Cache-Control': `s-maxage=${META_CACHE_TTL_SECONDS}` }
-  });
-
-  if (c?.executionCtx) {
-    c.executionCtx.waitUntil(cache.put(META_CACHE_VERSION_URL, versionResponse));
-  } else {
-    await cache.put(META_CACHE_VERSION_URL, versionResponse);
-  }
-
-  return version;
-};
-
-export const invalidateArticleMetadataCache = async () => {
-  await getMetaCache().delete(META_CACHE_VERSION_URL);
-};
-
 /**
- * 取得文章的聚合統計與總數 (具備 Edge 快取能力)
+ * 取得文章/作品列表與聚合統計（單一 db.batch 合併查詢，零快取延遲）
  */
-const getCachedAggregations = async (
+export const getArticlesService = async (
   db: D1Database,
-  c: Context | undefined,
-  filters: {
-    type?: string;
-    tag?: string;
-    isPublished?: number;
-    startTime?: string;
-    endTime?: string;
-  }): Promise<AggregationMetaData> => {
-  const { type, tag, isPublished, startTime, endTime } = filters;
-
-  // 1. 建立專屬的 Cache Key (URL)
-  const cacheVersion = await getMetaCacheVersion(c);
-  const cacheUrl = new URL('https://portfolio-backend.internal/cache/meta');
-  cacheUrl.searchParams.set('version', cacheVersion);
-  if (type) cacheUrl.searchParams.set('type', type);
-  if (tag) cacheUrl.searchParams.set('tag', tag);
-  if (isPublished !== undefined) cacheUrl.searchParams.set('isPublished', isPublished.toString());
-  if (startTime) cacheUrl.searchParams.set('startTime', startTime);
-  if (endTime) cacheUrl.searchParams.set('endTime', endTime);
-
-  const cacheRequest = new Request(cacheUrl.toString());
-  const cache = getMetaCache();
-
-  // 2. 嘗試從 Edge 節點讀取快取
-  const cachedRes = await cache.match(cacheRequest);
-  if (cachedRes) {
-    return await cachedRes.json() as AggregationMetaData;
-  }
-
-  // 3. 快取未命中：重新組裝統計專用的 WHERE 條件
+  type?: string,
+  tag?: string,
+  isPublished?: number,
+  limit: number = 10,
+  offset: number = 0,
+  startTime?: string,
+  endTime?: string
+) => {
+  // 1. 組裝基礎時間與發布狀態條件 (供分類統計共用)
   let baseWhere = `WHERE 1=1`;
   const baseParams: (string | number)[] = [];
+
   if (isPublished !== undefined) {
     baseWhere += ` AND a.is_published = ?`;
     baseParams.push(isPublished);
@@ -125,6 +69,7 @@ const getCachedAggregations = async (
   const categoryWhere = baseWhere;
   const categoryParams = [...baseParams];
 
+  // 2. 組裝標籤統計條件 (套用 type 過濾)
   let tagsWhere = baseWhere;
   const tagsParams = [...baseParams];
   if (type) {
@@ -132,109 +77,9 @@ const getCachedAggregations = async (
     tagsParams.push(type);
   }
 
+  // 3. 組裝文章列表與篩選總數條件 (套用 type + tag 過濾)
   let articlesWhere = tagsWhere;
   const articlesParams = [...tagsParams];
-  if (tag) {
-    articlesWhere += ` AND EXISTS (
-      SELECT 1 FROM article_tags at 
-      JOIN tags t ON at.tag_id = t.id 
-      WHERE at.article_id = a.id AND t.name = ?
-    )`;
-    articlesParams.push(tag);
-  }
-
-  // 4. 執行昂貴的資料庫統計查詢
-  const filteredTotalQuery = `SELECT COUNT(*) as count FROM articles a ${articlesWhere}`;
-  
-  const categoryAggregationsQuery = `
-    SELECT type AS name, COUNT(id) AS count FROM articles a
-    ${categoryWhere}
-    GROUP BY type
-    ORDER BY count DESC, name ASC;
-  `;
-  
-  const tagsAggregationsQuery = `
-    SELECT t.name, COUNT(at.article_id) AS count
-    FROM tags t
-    JOIN article_tags at ON t.id = at.tag_id
-    JOIN articles a ON at.article_id = a.id
-    ${tagsWhere}
-    GROUP BY t.id
-    ORDER BY count DESC, t.name ASC;
-  `;
-
-  const [totalRes, categoryAggResult, tagsAggResult] = await Promise.all([
-    db.prepare(filteredTotalQuery).bind(...articlesParams).first(),
-    db.prepare(categoryAggregationsQuery).bind(...categoryParams).all(),
-    db.prepare(tagsAggregationsQuery).bind(...tagsParams).all()
-  ]);
-
-  const totalFiltered = (totalRes as any)?.count || 0;
-  const totalCategories = categoryAggResult.results.reduce((sum, row) => sum + Number((row as any).count), 0);
-  const totalTags = tagsAggResult.results.reduce((sum, row) => sum + Number((row as any).count), 0);
-
-  const metaData: AggregationMetaData = { 
-    totalFiltered,
-    aggregations: {
-      totalCategories,
-      totalTags,
-      categories: categoryAggResult.results as { name: string; count: number }[],
-      tags: tagsAggResult.results as { name: string; count: number }[]
-    }
-  };
-
-  // 5. 將結果寫入快取 (設定 300 秒 TTL)，並推到背景執行
-  const responseToCache = new Response(JSON.stringify(metaData), {
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': `s-maxage=${META_CACHE_TTL_SECONDS}`
-    }
-  });
-  
-  if (c?.executionCtx) {
-    c.executionCtx.waitUntil(cache.put(cacheRequest, responseToCache));
-  } else {
-    await cache.put(cacheRequest, responseToCache);
-  }
-
-  return metaData;
-};
-
-/**
- * 取得已發布的文章/作品列表，支持分頁、類型過濾 (已最佳化 D1 Row Reads)
- */
-export const getArticlesService = async (
-  db: D1Database,
-  type?: string,
-  tag?: string,
-  isPublished?: number,
-  limit: number = 10,
-  offset: number = 0,
-  startTime?: string,
-  endTime?: string,
-  c?: Context
-) => {
-  // 1. 組裝「文章列表」專用的條件
-  let articlesWhere = `WHERE 1=1`;
-  const articlesParams: (string | number)[] = [];
-  
-  if (isPublished !== undefined) {
-    articlesWhere += ` AND a.is_published = ?`;
-    articlesParams.push(isPublished);
-  }
-
-  if (startTime) {
-    articlesWhere += ` AND a.published_at >= ?`;
-    articlesParams.push(startTime);
-  }
-  if (endTime) {
-    articlesWhere += ` AND a.published_at <= ?`;
-    articlesParams.push(endTime);
-  }
-  if (type) {
-    articlesWhere += ` AND a.type = ?`;
-    articlesParams.push(type);
-  }
   if (tag) {
     articlesWhere += ` AND EXISTS (
       SELECT 1 FROM article_tags at 
@@ -247,7 +92,7 @@ export const getArticlesService = async (
   const safeLimit = Math.max(1, Math.min(limit, 100));
   const safeOffset = Math.max(0, offset);
 
-  // 2. 查詢最新文章列表 (不快取，永遠保持即時)
+  // 4. 定義 4 條查詢語句（文章列表 + 篩選總數 + 分類統計 + 標籤統計）
   const articlesQuery = `
     SELECT a.id, a.slug, a.title, a.type, a.cover_image, a.excerpt, a.view_count, a.is_published, a.published_at,
            COALESCE((
@@ -261,33 +106,66 @@ export const getArticlesService = async (
     ORDER BY a.published_at DESC
     LIMIT ? OFFSET ?
   `;
-  
-  const articlesResult = await db.prepare(articlesQuery).bind(...articlesParams, safeLimit, safeOffset).all();
-  const articles = articlesResult.results.map(row => {
-    let parsedTags: string[] = [];
-    if (row.tags) {
-        parsedTags = JSON.parse(row.tags as string);
-        if (parsedTags.length === 1 && parsedTags[0] === null) parsedTags = [];
+
+  const filteredTotalQuery = `SELECT COUNT(*) as count FROM articles a ${articlesWhere}`;
+
+  const categoryAggregationsQuery = `
+    SELECT type AS name, COUNT(id) AS count FROM articles a
+    ${categoryWhere}
+    GROUP BY type
+    ORDER BY count DESC, name ASC;
+  `;
+
+  const tagsAggregationsQuery = `
+    SELECT t.name, COUNT(at.article_id) AS count
+    FROM tags t
+    JOIN article_tags at ON t.id = at.tag_id
+    JOIN articles a ON at.article_id = a.id
+    ${tagsWhere}
+    GROUP BY t.id
+    ORDER BY count DESC, t.name ASC;
+  `;
+
+  // 🚀 關鍵：透過單一 db.batch() 一次拿回列表與所有統計數據
+  const [articlesResult, totalRes, categoryAggResult, tagsAggResult] = await db.batch([
+    db.prepare(articlesQuery).bind(...articlesParams, safeLimit, safeOffset),
+    db.prepare(filteredTotalQuery).bind(...articlesParams),
+    db.prepare(categoryAggregationsQuery).bind(...categoryParams),
+    db.prepare(tagsAggregationsQuery).bind(...tagsParams)
+  ]);
+
+  // 5. 整理文章列表與解析標籤 JSON
+  const articles = (articlesResult.results || []).map((row: any) => {
+    let parsedTags = safeJsonParse<Array<string | null>>(row.tags, []);
+    if (parsedTags.length === 1 && parsedTags[0] === null) {
+      parsedTags = [];
     }
-    return { ...row, tags: parsedTags };
+    return { ...row, tags: parsedTags as string[] };
   });
 
-  // 3. 呼叫獨立的聚合快取函式
-  const metaData = await getCachedAggregations(db, c, {
-    type, tag, isPublished, startTime, endTime
-  });
+  // 6. 整理統計數據
+  const totalFiltered = Number((totalRes.results?.[0] as any)?.count || 0);
+  const categoryRows = (categoryAggResult.results || []) as { name: string; count: number }[];
+  const tagRows = (tagsAggResult.results || []) as { name: string; count: number }[];
 
-  // 4. 組合最終結果
+  const totalCategories = categoryRows.reduce((sum, row) => sum + Number(row.count), 0);
+  const totalTags = tagRows.reduce((sum, row) => sum + Number(row.count), 0);
+
   return {
     data: articles,
     pagination: {
-      totalFiltered: metaData.totalFiltered,   
+      totalFiltered,
       limit: safeLimit,
       offset: safeOffset,
       page: Math.floor(safeOffset / safeLimit) + 1,
-      totalPages: Math.ceil(metaData.totalFiltered / safeLimit) || 1
+      totalPages: Math.ceil(totalFiltered / safeLimit) || 1
     },
-    aggregations: metaData.aggregations
+    aggregations: {
+      totalCategories,
+      totalTags,
+      categories: categoryRows,
+      tags: tagRows
+    }
   };
 };
 
@@ -314,51 +192,57 @@ export const getArticleBySlugService = async (
 
   if (result) {
     // 1. 解析 Tags
-    let parsedTags = JSON.parse(result.tags as string);
-    if (parsedTags.length === 1 && parsedTags[0] === null) parsedTags = [];
+    let parsedTags = safeJsonParse<Array<string | null>>(result.tags, []);
+    if (parsedTags.length === 1 && parsedTags[0] === null) {
+      parsedTags = [];
+    }
     result.tags = parsedTags;
 
     // 2. 取得關聯的圖片集 (依據 sort_order 排序)
-    // 將撈出來的圖片陣列掛載到 result 上
     result.galleryImages = await getArticleGalleryImages(db, result.id as number);
   }
-  
+
   return result;
 };
 
 /**
- * 共用函式：同步文章標籤
+ * 輔助函式：產生同步文章標籤所需的 Batch Statements
  */
-const syncArticleTags = async (db: D1Database, articleId: number | string, tags: string[]) => {
-  if (!tags || tags.length === 0) return;
+const buildSyncArticleTagsStatements = (
+  db: D1Database,
+  articleId: number | string,
+  tags?: string[],
+  clearExisting = false
+) => {
+  const statements: D1PreparedStatement[] = [];
 
-  const normalizedTags = [...new Set(tags
-    .map(tag => String(tag).trim())
-    .filter(tag => tag.length > 0 && tag.length <= 50)
-  )];
-
-  if (normalizedTags.length === 0) return;
-
-  // 1. 確保標籤存在於 tags 表 (INSERT OR IGNORE)
-  const insertTagsStmts = normalizedTags.map(tag => 
-    db.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`).bind(tag)
-  );
-  if (insertTagsStmts.length > 0) {
-    await db.batch(insertTagsStmts);
+  if (clearExisting) {
+    statements.push(
+      db.prepare(`DELETE FROM article_tags WHERE article_id = ?`).bind(articleId)
+    );
   }
 
-  // 2. 取得這些標籤的 IDs
-  const placeholders = normalizedTags.map(() => '?').join(',');
-  const { results: tagRows } = await db.prepare(`SELECT id FROM tags WHERE name IN (${placeholders})`).bind(...normalizedTags).all();
+  const normalizedTags = Array.isArray(tags)
+    ? [...new Set(
+        tags
+          .map(tag => String(tag).trim())
+          .filter(tag => tag.length > 0 && tag.length <= 50)
+      )]
+    : [];
 
-  // 3. 綁定關聯至 article_tags 表，避免重複關聯造成 UNIQUE constraint
-  const uniqueTagIds = [...new Set(tagRows.map(row => Number(row.id)))];
-  const insertArticleTagsStmts = uniqueTagIds.map(tagId => 
-    db.prepare(`INSERT OR IGNORE INTO article_tags (article_id, tag_id) VALUES (?, ?)`).bind(articleId, tagId)
-  );
-  if (insertArticleTagsStmts.length > 0) {
-    await db.batch(insertArticleTagsStmts);
+  for (const tag of normalizedTags) {
+    statements.push(
+      db.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`).bind(tag)
+    );
+    statements.push(
+      db.prepare(`
+        INSERT OR IGNORE INTO article_tags (article_id, tag_id)
+        SELECT ?, id FROM tags WHERE name = ?
+      `).bind(articleId, tag)
+    );
   }
+
+  return { statements, normalizedTags };
 };
 
 /**
@@ -370,126 +254,158 @@ export const createArticleService = async (db: D1Database, payload: ArticlePaylo
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *;
   `;
-  
+
   const isPublished = payload.is_published ? 1 : 0;
   const publishedAt = isPublished ? new Date().toISOString() : null;
 
-  // 1. 寫入文章
-  const article = await db.prepare(query).bind(
-    payload.slug, payload.title, payload.type, payload.cover_image || null,
-    payload.excerpt || null, payload.content, 
-    payload.github_url || null, payload.demo_url || null, 
-    isPublished, publishedAt
-  ).first();
+  // 1. 寫入文章主表並取得新建立的 article.id
+  const article = await db
+    .prepare(query)
+    .bind(
+      payload.slug,
+      payload.title,
+      payload.type,
+      payload.cover_image || null,
+      payload.excerpt || null,
+      payload.content,
+      payload.github_url || null,
+      payload.demo_url || null,
+      isPublished,
+      publishedAt
+    )
+    .first();
 
-  // 2. 寫入標籤並建立關聯
-  const normalizedTags = Array.isArray(payload.tags)
-    ? [...new Set(payload.tags.map(tag => String(tag).trim()).filter(Boolean))]
-    : [];
-
-  if (article && normalizedTags.length > 0) {
-    await syncArticleTags(db, Number(article.id), normalizedTags);
+  if (!article) {
+    throw new Error('ARTICLE_CREATE_FAILED');
   }
 
-  // 3. 處理圖片集寫入 (使用 D1 Batch)
+  const articleId = Number(article.id);
+  const batchStatements: D1PreparedStatement[] = [];
+
+  // 2. 組裝標籤寫入與關聯語句
+  const { statements: tagStmts, normalizedTags } = buildSyncArticleTagsStatements(
+    db,
+    articleId,
+    payload.tags,
+    false
+  );
+  batchStatements.push(...tagStmts);
+
+  // 3. 組裝圖片集寫入語句
   const galleryImages = payload.galleryImages || [];
-  if (article && galleryImages.length > 0) {
-    const statements = galleryImages.map((img, index) => {
-      // 若前端未傳遞排序，則預設使用陣列索引
-      const sortOrder = img.sort_order ?? index; 
-      const label = img.label || '';
-      
-      return db.prepare(
-        `INSERT INTO article_images (article_id, url, label, sort_order) VALUES (?, ?, ?, ?)`
-      ).bind(article.id, img.url, label, sortOrder);
-    });
+  galleryImages.forEach((img, index) => {
+    const sortOrder = img.sort_order ?? index;
+    const label = img.label || '';
 
-    await db.batch(statements);
+    batchStatements.push(
+      db.prepare(
+        `INSERT INTO article_images (article_id, url, label, sort_order) VALUES (?, ?, ?, ?)`
+      ).bind(articleId, img.url, label, sortOrder)
+    );
+  });
+
+  // 4. 若有圖片，順便在同一個 batch 結尾查詢實際保存的圖片集
+  if (galleryImages.length > 0) {
+    batchStatements.push(getArticleGalleryImagesStmt(db, articleId));
   }
 
-  const savedGalleryImages = article
-    ? await getArticleGalleryImages(db, article.id as number)
-    : [];
+  let savedGalleryImages: Record<string, unknown>[] = [];
+  if (batchStatements.length > 0) {
+    const batchResults = await db.batch(batchStatements);
+    if (galleryImages.length > 0) {
+      savedGalleryImages = (batchResults[batchResults.length - 1].results as Record<string, unknown>[]) || [];
+    }
+  }
 
-  // 回傳資料庫實際保存的排序與標籤值
   return { ...article, tags: normalizedTags, galleryImages: savedGalleryImages };
 };
 
 /**
-- 更新文章內容
+ * 更新文章內容 (單一 Batch 原子交易，具備自動 Rollback 保護)
  */
 export const updateArticleService = async (db: D1Database, id: string, payload: ArticlePayload) => {
-  const query = `
-    UPDATE articles 
-    SET slug = ?, title = ?, type = ?, cover_image = ?, excerpt = ?, content = ?, 
-        github_url = ?, demo_url = ?, is_published = ?,
-        published_at = CASE 
-            WHEN ? = 1 AND published_at IS NULL THEN CURRENT_TIMESTAMP
-            WHEN ? = 0 THEN NULL
-            ELSE published_at 
-        END,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-    RETURNING *;
-  `;
-  
-  const isPublished = payload.is_published ? 1 : 0;
-  const normalizedTags = Array.isArray(payload.tags)
-    ? [...new Set(payload.tags.map(tag => String(tag).trim()).filter(Boolean))]
-    : [];
-
-  // 1. 更新文章
-  const article = await db.prepare(query).bind(
-    payload.slug, payload.title, payload.type, payload.cover_image || null,
-    payload.excerpt || null, payload.content, 
-    payload.github_url || null, payload.demo_url || null, 
-    isPublished, 
-    isPublished, 
-    isPublished, 
-    id
-  ).first();
-
-  if (!article) {
+  // 1. 先確認文章是否存在，避免對不存在的 id 執行外鍵關聯寫入
+  const existing = await db.prepare(`SELECT id FROM articles WHERE id = ?`).bind(id).first();
+  if (!existing) {
     return null;
   }
 
-  // 2. 更新標籤關聯
-  await db.prepare(`DELETE FROM article_tags WHERE article_id = ?`).bind(id).run();
-  if (normalizedTags.length > 0) {
-    await syncArticleTags(db, Number(article.id), normalizedTags);
-  }
+  const isPublished = payload.is_published ? 1 : 0;
+  const statements: D1PreparedStatement[] = [];
 
-  // 3. 更新圖片集 (先刪除舊關聯，再新增傳入的新圖)
+  // 2. 更新文章本體 (Batch 第 0 筆)
+  statements.push(
+    db.prepare(`
+      UPDATE articles 
+      SET slug = ?, title = ?, type = ?, cover_image = ?, excerpt = ?, content = ?, 
+          github_url = ?, demo_url = ?, is_published = ?,
+          published_at = CASE 
+              WHEN ? = 1 AND published_at IS NULL THEN CURRENT_TIMESTAMP
+              WHEN ? = 0 THEN NULL
+              ELSE published_at 
+          END,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+      RETURNING *;
+    `).bind(
+      payload.slug,
+      payload.title,
+      payload.type,
+      payload.cover_image || null,
+      payload.excerpt || null,
+      payload.content,
+      payload.github_url || null,
+      payload.demo_url || null,
+      isPublished,
+      isPublished,
+      isPublished,
+      id
+    )
+  );
+
+  // 3. 組裝標籤同步語句 (包含清空舊關聯與建立新關聯)
+  const { statements: tagStmts, normalizedTags } = buildSyncArticleTagsStatements(
+    db,
+    id,
+    payload.tags,
+    true
+  );
+  statements.push(...tagStmts);
+
+  // 4. 組裝圖片集更新語句 (若有傳入 galleryImages 則先刪後增)
   if (payload.galleryImages !== undefined) {
-    const statements = [];
-    
-    // 刪除該文章原有的所有圖片集記錄
     statements.push(
       db.prepare(`DELETE FROM article_images WHERE article_id = ?`).bind(id)
     );
 
-    // 重新建立圖片記錄
     payload.galleryImages.forEach((img, index) => {
       const sortOrder = img.sort_order ?? index;
       const label = img.label || '';
-      
+
       statements.push(
         db.prepare(
           `INSERT INTO article_images (article_id, url, label, sort_order) VALUES (?, ?, ?, ?)`
         ).bind(id, img.url, label, sortOrder)
       );
     });
-
-    // 透過 Batch 確保交易完整性 (Transaction)
-    await db.batch(statements);
   }
 
-  const savedGalleryImages = await getArticleGalleryImages(db, article.id as number);
+  // 5. 在 Batch 最後一筆查詢最新圖片集
+  statements.push(getArticleGalleryImagesStmt(db, id));
 
-  // 未傳 galleryImages 時保留舊圖，並回傳目前資料庫內容
-  return { 
-    ...article, 
-    tags: normalizedTags, 
+  // 6. 一次性送出所有變更，確保 Transaction 原子性
+  const batchResults = await db.batch(statements);
+
+  const updatedArticle = (batchResults[0].results?.[0] as Record<string, unknown>) || null;
+  if (!updatedArticle) {
+    return null;
+  }
+
+  const savedGalleryImages = batchResults[batchResults.length - 1].results || [];
+
+  return {
+    ...updatedArticle,
+    tags: normalizedTags,
     galleryImages: savedGalleryImages
   };
 };
@@ -498,14 +414,12 @@ export const updateArticleService = async (db: D1Database, id: string, payload: 
  * 移除文章
  */
 export const deleteArticleService = async (db: D1Database, id: string) => {
-  // 因 schema.sql 中 article_tags 表設定了 ON DELETE CASCADE，
-  // 刪除 articles 資料會自動連帶清除對應的 article_tags，不需額外處理。
   const query = `
     DELETE FROM articles 
     WHERE id = ?
     RETURNING id;
   `;
-  
+
   const result = await db.prepare(query).bind(id).first();
   return result;
 };

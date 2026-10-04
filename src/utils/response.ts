@@ -9,11 +9,12 @@ export type ErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
+  | 'TOO_MANY_REQUESTS'
   | 'INTERNAL_ERROR'
 
 export const fail = (
   c: Context,
-  status: 400 | 401 | 403 | 404 | 409 | 423 | 500,
+  status: 400 | 401 | 403 | 404 | 409 | 423 | 429 | 500,
   code: ErrorCode,
   message: string
 ) => {

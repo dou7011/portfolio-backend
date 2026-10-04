@@ -43,35 +43,28 @@ export const getRoleByIdService = async (db: D1Database, id: string): Promise<Ro
  * 新增角色
  */
 export const createRoleService = async (db: D1Database, name: string, description?: string, permissionIds?: number[]): Promise<number> => {
-  const existing = await db.prepare('SELECT id FROM roles WHERE name = ?').bind(name).first();
-  if (existing) throw new Error('ROLE_ALREADY_EXISTS');
+  const existing = await db.prepare('SELECT id FROM roles WHERE name = ?').bind(name).first()
+  if (existing) throw new Error('ROLE_ALREADY_EXISTS')
 
-  const statements: any[] = [
-    db.prepare('INSERT INTO roles (name, description) VALUES (?, ?) RETURNING id').bind(name, description || null)
-  ];
+  // 1. 先新增角色並取得新產生的 id
+  const newRole = await db
+    .prepare('INSERT INTO roles (name, description) VALUES (?, ?) RETURNING id')
+    .bind(name, description || null)
+    .first<{ id: number }>()
 
-  if (Array.isArray(permissionIds) && permissionIds.length > 0) {
-    for (const permissionId of permissionIds) {
-      statements.push(db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').bind(0, permissionId));
-    }
+  if (!newRole?.id) {
+    throw new Error('ROLE_CREATE_FAILED')
   }
 
-  const results = await db.batch(statements);
-  const insertResult = results[0] as any;
-  const roleId = insertResult?.results?.[0]?.id as number | undefined;
-
-  if (roleId === undefined) {
-    throw new Error('ROLE_CREATE_FAILED');
-  }
-
+  // 2. 拿到真正的 newRole.id 後，再批次寫入權限關聯
   if (Array.isArray(permissionIds) && permissionIds.length > 0) {
     const rolePermissionStatements = permissionIds.map(permissionId =>
-      db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').bind(roleId, permissionId)
-    );
-    await db.batch(rolePermissionStatements);
+      db.prepare('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)').bind(newRole.id, permissionId)
+    )
+    await db.batch(rolePermissionStatements)
   }
 
-  return roleId;
+  return newRole.id
 }
 
 /**

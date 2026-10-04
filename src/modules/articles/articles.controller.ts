@@ -5,13 +5,13 @@ import { PERMISSIONS } from '../../constants/permissions';
 import { logger } from '../../utils/logger';
 import { fail, ok } from '../../utils/response';
 import { parseJsonBody } from '../../utils/parseJsonBody';
-import { getArticlesService,
+import {
+  getArticlesService,
   getArticleBySlugService,
   createArticleService,
   updateArticleService,
   deleteArticleService,
-  invalidateArticleMetadataCache,
-type ArticlePayload
+  type ArticlePayload
 } from './articles.service';
 
 /**
@@ -19,7 +19,6 @@ type ArticlePayload
  */
 export const getArticlesController = async (c: Context<AppEnv>) => {
   try {
-    // 取得使用者資訊，判斷是否有查看草稿的權限
     const user = c.get('user');
     const canViewDrafts = user?.permissions.includes(PERMISSIONS.ARTICLE_WRITE) ?? false;
 
@@ -47,7 +46,7 @@ export const getArticlesController = async (c: Context<AppEnv>) => {
     // 解析 pageSize 參數（每頁文章數，預設 10，最多 100）
     const pageSizeQuery = c.req.query('pageSize');
     const pageSize = pageSizeQuery ? Math.min(Math.max(parseInt(pageSizeQuery, 10), 1), 100) : 10;
-    
+
     // 解析 page 參數（第幾頁，預設 1）
     const pageQuery = c.req.query('page');
     const page = pageQuery ? Math.max(parseInt(pageQuery, 10), 1) : 1;
@@ -60,13 +59,12 @@ export const getArticlesController = async (c: Context<AppEnv>) => {
     if (startTime && endTime && new Date(startTime) > new Date(endTime)) {
       return fail(c, 400, 'BAD_REQUEST', 'startTime 不可晚於 endTime');
     }
-    
-    // 計算 offset
+
     const offset = (page - 1) * pageSize;
 
     const db = c.env.DB;
-    const result = await getArticlesService( db, type, tag, published, pageSize, offset, startTime, endTime, c );
-    
+    const result = await getArticlesService(db, type, tag, published, pageSize, offset, startTime, endTime);
+
     return ok(c, { data: result });
   } catch (error: any) {
     logger.error('getArticlesController', error);
@@ -80,7 +78,6 @@ export const getArticlesController = async (c: Context<AppEnv>) => {
 export const getArticleBySlugController = async (c: Context<AppEnv>) => {
   try {
     const slug = c.req.param('slug');
-    // 確保 slug 一定存在
     if (!slug) {
       return fail(c, 400, 'BAD_REQUEST', '缺少必要的文章識別碼 (slug)');
     }
@@ -89,7 +86,7 @@ export const getArticleBySlugController = async (c: Context<AppEnv>) => {
     const user = c.get('user');
     const canViewDrafts = user?.permissions.includes(PERMISSIONS.ARTICLE_WRITE) ?? false;
     const article = await getArticleBySlugService(db, slug, canViewDrafts);
-    
+
     if (!article) {
       return fail(c, 404, 'NOT_FOUND', '找不到該文章或專案');
     }
@@ -117,13 +114,11 @@ export const createArticleController = async (c: Context<AppEnv>) => {
   try {
     const db = c.env.DB;
     const newArticle = await createArticleService(db, body as ArticlePayload);
-    await invalidateArticleMetadataCache();
-    
+
     return ok(c, { message: '文章建立成功', data: newArticle });
   } catch (error: any) {
     logger.error('createArticleController', error);
-    // 捕捉 slug 重複的錯誤 (SQLite 的 UNIQUE constraint failed)
-    if (error.message.includes('UNIQUE constraint failed')) {
+    if (error.message?.includes('UNIQUE constraint failed')) {
       return fail(c, 409, 'CONFLICT', '這個 slug 已經被使用過了，請換一個');
     }
     return fail(c, 500, 'INTERNAL_ERROR', '建立文章失敗');
@@ -149,41 +144,61 @@ export const updateArticleController = async (c: Context<AppEnv>) => {
 
     const db = c.env.DB;
     const updatedArticle = await updateArticleService(db, id, body as ArticlePayload);
-    
+
     if (!updatedArticle) {
       return fail(c, 404, 'NOT_FOUND', '找不到該文章');
     }
 
-    await invalidateArticleMetadataCache();
-
     return ok(c, { message: '文章更新成功', data: updatedArticle });
   } catch (error: any) {
     logger.error('updateArticleController', error);
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      return fail(c, 409, 'CONFLICT', '這個 slug 已經被其他文章使用過了，請換一個');
+    }
     return fail(c, 500, 'INTERNAL_ERROR', '更新文章失敗');
   }
 };
 
 const isValidArticlePayload = (body: Partial<ArticlePayload>): body is ArticlePayload => {
   const hasValidOptionalString = (value: unknown, maxLength: number) =>
-    value === undefined || (typeof value === 'string' && value.length <= maxLength)
+    value === undefined || (typeof value === 'string' && value.length <= maxLength);
 
-  return typeof body.slug === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug) && body.slug.length <= 100 &&
-    typeof body.title === 'string' && body.title.trim().length > 0 && body.title.length <= 200 &&
-    typeof body.type === 'string' && body.type.trim().length > 0 && body.type.length <= 50 &&
-    typeof body.content === 'string' && body.content.trim().length > 0 && body.content.length <= 100_000 &&
+  return (
+    typeof body.slug === 'string' &&
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug) &&
+    body.slug.length <= 100 &&
+    typeof body.title === 'string' &&
+    body.title.trim().length > 0 &&
+    body.title.length <= 200 &&
+    typeof body.type === 'string' &&
+    body.type.trim().length > 0 &&
+    body.type.length <= 50 &&
+    typeof body.content === 'string' &&
+    body.content.trim().length > 0 &&
+    body.content.length <= 100_000 &&
     hasValidOptionalString(body.cover_image, 255) &&
     hasValidOptionalString(body.excerpt, 2_000) &&
     hasValidOptionalString(body.github_url, 255) &&
     hasValidOptionalString(body.demo_url, 255) &&
     (body.is_published === undefined || typeof body.is_published === 'boolean') &&
-    (body.tags === undefined || (Array.isArray(body.tags) && body.tags.length <= 10 &&
-      body.tags.every(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.trim().length <= 50))) &&
-    (body.galleryImages === undefined || (Array.isArray(body.galleryImages) &&
-      body.galleryImages.every(image => image !== null && typeof image === 'object' &&
-        typeof image.url === 'string' && image.url.trim().length > 0 && image.url.length <= 2_048 &&
-        (image.label === undefined || (typeof image.label === 'string' && image.label.length <= 200)) &&
-        (image.sort_order === undefined || (Number.isInteger(image.sort_order) && image.sort_order >= 0)))))
-}
+    (body.tags === undefined ||
+      (Array.isArray(body.tags) &&
+        body.tags.length <= 10 &&
+        body.tags.every(tag => typeof tag === 'string' && tag.trim().length > 0 && tag.trim().length <= 50))) &&
+    (body.galleryImages === undefined ||
+      (Array.isArray(body.galleryImages) &&
+        body.galleryImages.every(
+          image =>
+            image !== null &&
+            typeof image === 'object' &&
+            typeof image.url === 'string' &&
+            image.url.trim().length > 0 &&
+            image.url.length <= 2_048 &&
+            (image.label === undefined || (typeof image.label === 'string' && image.label.length <= 200)) &&
+            (image.sort_order === undefined || (Number.isInteger(image.sort_order) && image.sort_order >= 0))
+        )))
+  );
+};
 
 /**
  * 刪除文章 (需權限)
@@ -191,20 +206,17 @@ const isValidArticlePayload = (body: Partial<ArticlePayload>): body is ArticlePa
 export const deleteArticleController = async (c: Context<AppEnv>) => {
   try {
     const id = c.req.param('id');
-    
+
     if (!id) {
       return fail(c, 400, 'BAD_REQUEST', '缺少要刪除的文章 ID');
     }
 
     const db = c.env.DB;
     const deletedRecord = await deleteArticleService(db, id);
-    
-    // 如果資料庫沒有回傳 id，代表原本就找不到這筆資料
+
     if (!deletedRecord) {
       return fail(c, 404, 'NOT_FOUND', '找不到該文章，可能已被刪除');
     }
-
-    await invalidateArticleMetadataCache();
 
     return ok(c, { message: '文章已成功刪除' });
   } catch (error: any) {

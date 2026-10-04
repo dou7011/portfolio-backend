@@ -6,11 +6,9 @@ import { fail } from '../utils/response'
 const unsafeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export const csrfGuard = async (c: Context<AppEnv>, next: Next) => {
-  if (
-    !unsafeMethods.has(c.req.method) ||
-    c.req.path.endsWith('/auth/login') ||
-    c.req.path.endsWith('/auth/logout')
-  ) {
+  const CSRF_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/logout'])
+  if (!unsafeMethods.has(c.req.method) || CSRF_EXEMPT_PATHS.has(c.req.path))
+  {
     await next()
     return
   }
