@@ -9,6 +9,7 @@ import { isOptionalHttpUrl } from '../../utils/isHttpUrl';
 import {
   getArticlesService,
   getArticleBySlugService,
+  incrementArticleViewCountService,
   createArticleService,
   updateArticleService,
   deleteArticleService,
@@ -96,6 +97,28 @@ export const getArticleBySlugController = async (c: Context<AppEnv>) => {
   } catch (error: any) {
     logger.error('getArticleBySlugController', error);
     return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法取得資料');
+  }
+};
+
+/**
+ * 記錄一次有效閱讀（前端確認停留夠久或已讀到底才會呼叫），瀏覽次數 +1
+ */
+export const recordArticleViewController = async (c: Context<AppEnv>) => {
+  try {
+    const slug = c.req.param('slug');
+    if (!slug) {
+      return fail(c, 400, 'BAD_REQUEST', '缺少必要的文章識別碼 (slug)');
+    }
+
+    const updated = await incrementArticleViewCountService(c.env.DB, slug);
+    if (!updated) {
+      return fail(c, 404, 'NOT_FOUND', '找不到該文章或專案');
+    }
+
+    return ok(c, { data: null });
+  } catch (error: any) {
+    logger.error('recordArticleViewController', error);
+    return fail(c, 500, 'INTERNAL_ERROR', '伺服器錯誤，無法記錄瀏覽次數');
   }
 };
 

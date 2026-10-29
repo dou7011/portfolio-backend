@@ -7,7 +7,9 @@ const unsafeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export const csrfGuard = async (c: Context<AppEnv>, next: Next) => {
   const CSRF_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/logout'])
-  if (!unsafeMethods.has(c.req.method) || CSRF_EXEMPT_PATHS.has(c.req.path))
+  // 匿名訪客沒有 CSRF cookie；瀏覽次數端點不需登入且僅做計數，故豁免
+  const isArticleViewPath = /^\/api\/articles\/[^/]+\/view$/.test(c.req.path)
+  if (!unsafeMethods.has(c.req.method) || CSRF_EXEMPT_PATHS.has(c.req.path) || isArticleViewPath)
   {
     await next()
     return

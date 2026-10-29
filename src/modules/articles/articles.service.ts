@@ -206,6 +206,18 @@ export const getArticleBySlugService = async (
 };
 
 /**
+ * 已發布文章的瀏覽次數 +1，回傳是否有找到文章
+ */
+export const incrementArticleViewCountService = async (db: D1Database, slug: string) => {
+  const result = await db
+    .prepare(`UPDATE articles SET view_count = COALESCE(view_count, 0) + 1 WHERE slug = ? AND is_published = 1`)
+    .bind(slug)
+    .run();
+
+  return (result.meta?.changes ?? 0) > 0;
+};
+
+/**
  * 輔助函式：產生同步文章標籤所需的 Batch Statements
  */
 const buildSyncArticleTagsStatements = (
